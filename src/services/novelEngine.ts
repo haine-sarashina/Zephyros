@@ -562,23 +562,38 @@ ${chapterSummaries}
     signal?: AbortSignal
   ): Promise<string> {
     const scene = chapter.scenes[sceneIndex];
+    const totalScenes = chapter.scenes.length;
+    const isLastSceneInChapter = (sceneIndex === totalScenes - 1);
+    const totalChapters = promptSettings.targetChapterCount || 12;
+    const isLastChapter = (chapter.id === totalChapters);
+
+    let endingIndicator = '';
+    if (!isLastSceneInChapter) {
+      endingIndicator = `（シーン${sceneIndex + 2}に続く）`;
+    } else if (!isLastChapter) {
+      endingIndicator = `（第${chapter.id + 1}話に続く）`;
+    } else {
+      endingIndicator = `（全${totalChapters}話・完）`;
+    }
+
     const systemPrompt = `あなたは長編小説のプロ執筆者（ライターAI）です。
 情景描写、感情描写、登場人物の対話を用いて、物語の本文を執筆してください。
 
-【執筆ルール】
-- 1つのシーンにつき 1,500字〜2,500字程度の描写を書き上げてください。
-- 設定資料集に登録されている口調・一人称・二人称・人間関係を厳格に守ってください。
-- 特殊用語辞典に登録されている造語やルビ表記（例: 異世界《いせかい》）を積極的に活用してください。
-- 地名や作品固有コード等を除き、本文内に不必要な英単語（例: oversized）をそのまま使用せず、必ずカタカナ（例: オーバーサイズ）で記述してください。
-- ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。ルビの読みは「ひらがな」で記述してください。
-- 新キャラクター、新しい地名、新しい道具や品物が登場する場合は、魅力的な名称と描写を添えて登場させてください。
-- 前後の話や前シーンの流れと自然につながるように書き出してください。
-- 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な小説本文のみを出力してください。`;
+【執筆・文章ルール（厳格順守）】
+1. 1つのシーンにつき 1,500字〜2,500字程度の描写を書き上げ、途中で切れずにシーンとしてきれいに完結させてください。
+2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
+3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
+4. **前後関係の接続と整合性**: 提供された「直前シーンのラスト本文」および状況を引き継ぎ、登場人物の行動・位置関係や時間の流れが自然につながるように記述してください。不自然な場面飛躍や設定矛盾を防止してください。
+5. 設定資料集に登録されている口調・一人称・二人称・人間関係を厳格に守ってください。
+6. 特殊用語辞典に登録されている造語やルビ表記（例: 異世界《いせかい》）を積極的に活用してください。
+7. 地名や作品固有コード等を除き、本文内に不必要な英単語（例: oversized）をそのまま使用せず、必ずカタカナ（例: オーバーサイズ）で記述してください。
+8. ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。ルビの読みは「ひらがな」で記述してください。
+9. 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な小説本文のみを出力してください。`;
 
     const userPrompt = `【作品テーマ/トーン】: ${promptSettings.storyConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene.summary})
-【これまでのあらすじ・前シーンまでの状況】:
+【これまでのあらすじ・直前シーンのラスト本文】:
 ${previousContextSummary || 'ここから物語が始まります。'}
 
 ${this.buildBibleContext(bible, glossary)}
@@ -594,7 +609,7 @@ ${this.buildBibleContext(bible, glossary)}
       0.75,
       signal
     );
-    return NovelEngine.sanitizeManuscript(raw);
+    return NovelEngine.sanitizeManuscript(raw, endingIndicator);
   }
 
   /**
@@ -615,16 +630,32 @@ ${this.buildBibleContext(bible, glossary)}
     signal?: AbortSignal
   ): Promise<string> {
     const scene = chapter.scenes[sceneIndex];
+    const totalScenes = chapter.scenes.length;
+    const isLastSceneInChapter = (sceneIndex === totalScenes - 1);
+    const totalChapters = promptSettings.targetChapterCount || 12;
+    const isLastChapter = (chapter.id === totalChapters);
+
+    let endingIndicator = '';
+    if (!isLastSceneInChapter) {
+      endingIndicator = `（シーン${sceneIndex + 2}に続く）`;
+    } else if (!isLastChapter) {
+      endingIndicator = `（第${chapter.id + 1}話に続く）`;
+    } else {
+      endingIndicator = `（全${totalChapters}話・完）`;
+    }
+
     const systemPrompt = `あなたは長編小説のプロ執筆者（ライターAI）です。
 編集者AIから提出された校閲指摘（矛盾点や誤字脱字）を修正し、完成度の高い修正稿を執筆してください。
 
-【修正ルール】
+【修正・文章ルール】
 1. 指摘された矛盾点や表現の不整合を確実に修正してください。
-2. 本文中に不用意な英単語（例: oversized）が含まれている場合はカタカナ表記に修正してください。
-3. ルビ表記（《ルビ》）の閉じ忘れや形式不備がある場合は修復してください。
-4. 修正箇所以外の優れた情景描写、感情描写、文体や対話のテンポは保持してください。
-5. 修正によって新たな矛盾が発生しないよう、設定資料集を厳格に守ってください。
-6. 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な修正本文のみを出力してください。`;
+2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
+3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
+4. 前のシーン・前話との状況・時間のつながりに不自然な飛躍がないよう自然に接続してください。
+5. 本文中に不用意な英単語（例: oversized）が含まれている場合はカタカナ表記に修正してください。
+6. ルビ表記（《ルビ》）の閉じ忘れや形式不備がある場合は修復してください。
+7. 修正箇所以外の優れた情景描写、感情描写、文体や対話のテンポは保持してください。
+8. 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な修正本文のみを出力してください。`;
 
     const feedbackText = feedbackComments
       .map((c) => `- 指摘 [${c.type}]: ${c.comment} ${c.originalText ? `(該当箇所: "${c.originalText}")` : ''}`)
@@ -633,7 +664,7 @@ ${this.buildBibleContext(bible, glossary)}
     const userPrompt = `【作品テーマ/トーン】: ${promptSettings.storyConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene?.summary || ''})
-【これまでのあらすじ・前シーンまでの状況】: ${previousContextSummary || 'なし'}
+【これまでのあらすじ・直前シーンのラスト本文】: ${previousContextSummary || 'なし'}
 
 ${this.buildBibleContext(bible, glossary)}
 
@@ -654,15 +685,15 @@ ${originalDraft}
       0.7,
       signal
     );
-    return NovelEngine.sanitizeManuscript(raw);
+    return NovelEngine.sanitizeManuscript(raw, endingIndicator);
   }
 
   /**
-   * 原稿テキストの自動整律・ルビ記号の補正ヘルパー
+   * 原稿テキストの自動整律・ルビ記号の補正・句点整形ヘルパー
    */
-  static sanitizeManuscript(text: string): string {
+  static sanitizeManuscript(text: string, endingIndicator?: string): string {
     if (!text) return '';
-    let sanitized = text;
+    let sanitized = text.trim();
 
     // 1. 未閉じルビ 《ルビ の自動補正 (例: 夕暮れ《ゆうぐれ -> 夕暮れ《ゆうぐれ》)
     sanitized = sanitized.replace(/(《[^》\r\n]+)(?=[。、！？\r\n\s]|$)/g, '$1》');
@@ -677,6 +708,33 @@ ${originalDraft}
 
     // 4. 空ルビの削除
     sanitized = sanitized.replace(/《\s*》/g, '');
+
+    // 5. 台詞の末尾の「。」の自動削除 (例: 「〜〜。」 → 「〜〜」)
+    sanitized = sanitized.replace(/。+(?=」)/g, '');
+    sanitized = sanitized.replace(/。+(?=』)/g, '');
+
+    // 6. 未閉じのカギ括弧「 の自動補正
+    const openQuotes = (sanitized.match(/「/g) || []).length;
+    const closeQuotes = (sanitized.match(/」/g) || []).length;
+    if (openQuotes > closeQuotes) {
+      for (let i = 0; i < openQuotes - closeQuotes; i++) {
+        sanitized += '」';
+      }
+    }
+
+    // 7. 末尾の句点・終止記号チェック（『。,」,）,】,！,？,……』等で終わっていない場合に『。』を補填）
+    const validEnds = /[。!！?？…』」\)）\]】〕＞>'"\s]$/;
+    if (!validEnds.test(sanitized)) {
+      if (!/（.+に続く）$/.test(sanitized) && !/（全?\d*話?・?完）$/.test(sanitized)) {
+        sanitized += '。';
+      }
+    }
+
+    // 8. 終了インジケーター（「（シーン2に続く）」「（第2話に続く）」「（全12話・完）」等）の付与・重複除去
+    if (endingIndicator && endingIndicator.trim()) {
+      sanitized = sanitized.replace(/\s*（(?:シーン\d+に続く|第\d+話に続く|全?\d*話?・?完|つづく)）\s*$/g, '');
+      sanitized = `${sanitized.trim()}\n\n${endingIndicator.trim()}`;
+    }
 
     return sanitized;
   }
@@ -703,8 +761,9 @@ ${originalDraft}
 3. 単純な誤字脱字（typo）や語尾・表現の提案（suggestion）は hasCriticalError: false としてください。
 4. **英単語・アルファベット混入のチェック**: 地名や作品固有コード等を除き、日本語の本文内に不用意に残っている英単語（例: "oversized" → "オーバーサイズ"、"casual" → "カジュアル" など）は typo として指摘し、必ず "originalText" ('oversized') と "suggestedText" ('オーバーサイズ') を指定してください。
 5. **ルビ表記・記号崩れのチェック**: 《 の閉じ忘れ（例: "夕暮れ《ゆうぐれ" → "夕暮れ《ゆうぐれ》"）やルビの脱落・カッコ崩れは typo として指摘し、必ず "originalText" と "suggestedText" を指定してください。
-6. typo（誤字脱字・表記崩れ）を指摘する場合は、必ず "originalText" (誤りの原文) と "suggestedText" (正解・置換後のテキスト) の両方を正確に指定してください。
-7. 本文の再生成は行わず、指示通りのJSONフォーマットのみを返してください。
+6. **台詞末尾の句点（。）および文末切れのチェック**: 台詞の末尾に「。」が含まれる場合（例: 『「〜〜。」』）や、文章の最後が句点・終止記号なく途切れている場合は typo（表記崩れ）として指摘し、"originalText" と "suggestedText" を指定してください。
+7. typo（誤字脱字・表記崩れ）を指摘する場合は、必ず "originalText" (誤りの原文) と "suggestedText" (正解・置換後のテキスト) の両方を正確に指定してください。
+8. 本文の再生成は行わず、指示通りのJSONフォーマットのみを返してください。
 
 必ず以下のJSON形式でのみ出力してください：
 

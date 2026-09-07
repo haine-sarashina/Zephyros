@@ -359,11 +359,28 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                   : `一時的エラー発生のためシーン ${sIdx + 1} を自動リトライ執筆中 (${sceneAttempt}/3 回目)...`
               );
 
-              // 直前の文脈サマリー（前話のタイトルとあらすじ）
-              let prevSummary = currentNovelData.synopsis;
+              // 直前の文脈サマリー（前話のあらすじ ＋ 直前シーンのラスト本文抜粋）
+              let prevSummary = `【全体あらすじ】: ${currentNovel.synopsis}`;
               if (cIdx > 0) {
                 const prevCh = currentNovel.chapters[cIdx - 1];
-                prevSummary = `【前話: ${prevCh.title}】 のあらすじ: ${prevCh.synopsis}`;
+                prevSummary += `\n【前話（${prevCh.title}）あらすじ】: ${prevCh.synopsis}`;
+              }
+
+              let prevSceneExcerpt = '';
+              if (sIdx > 0 && chapter.scenes[sIdx - 1]?.content) {
+                const lastText = chapter.scenes[sIdx - 1].content.trim();
+                prevSceneExcerpt = `\n【直前シーン（シーン ${sIdx}）のラスト本文】:\n...${lastText.slice(-600)}`;
+              } else if (cIdx > 0) {
+                const prevCh = currentNovel.chapters[cIdx - 1];
+                const lastSceneOfPrevCh = prevCh.scenes[prevCh.scenes.length - 1];
+                if (lastSceneOfPrevCh?.content) {
+                  const lastText = lastSceneOfPrevCh.content.trim();
+                  prevSceneExcerpt = `\n【前話（${prevCh.title}）最終シーンのラスト本文】:\n...${lastText.slice(-600)}`;
+                }
+              }
+
+              if (prevSceneExcerpt) {
+                prevSummary += prevSceneExcerpt;
               }
 
               // 執筆者AIがストリーミングで本文執筆
@@ -514,8 +531,22 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                 }
               }
 
-              // 原稿の整律・未閉じルビ《》の最終補正
-              draftedContent = NovelEngine.sanitizeManuscript(draftedContent);
+              // 原稿の整律・未閉じルビ《》の最終補正 ＆ 終了インジケーター付与
+              const totalScenes = chapter.scenes.length;
+              const isLastSceneInChapter = (sIdx === totalScenes - 1);
+              const totalChapters = promptSettings.targetChapterCount || currentNovel.chapters.length || 12;
+              const isLastChapter = (cIdx === totalChapters - 1);
+
+              let endingIndicator = '';
+              if (!isLastSceneInChapter) {
+                endingIndicator = `（シーン${sIdx + 2}に続く）`;
+              } else if (!isLastChapter) {
+                endingIndicator = `（第${cIdx + 2}話に続く）`;
+              } else {
+                endingIndicator = `（全${totalChapters}話・完）`;
+              }
+
+              draftedContent = NovelEngine.sanitizeManuscript(draftedContent, endingIndicator);
 
               // 設定管理AIによる新要素の抽出 ＆ 設定資料集への反映
               setCurrentStatus('設定管理AIが校閲済み原稿から新登場の人物・品物・地名・用語を抽出中...');

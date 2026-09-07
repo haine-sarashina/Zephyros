@@ -222,14 +222,15 @@ JSON構造:
   ],
   "characters": [
     {
-      "name": "主人公・主要人物名",
-      "ruby": "ふりがな",
-      "role": "役割（主人公/ヒロイン/ライバル/師匠等）",
-      "firstPerson": "一人称",
-      "secondPerson": "二人称",
+      "name": "キャラクター名（本名のみ。例: タクマ。「（主人公）」などの注釈カッコは絶対含めない）",
+      "ruby": "ふりがな（ひらなが）",
+      "role": "役割（例: 主人公, ヒロイン, ライバル, 師匠など）",
+      "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」「僕」「わし」等。文章・セリフは禁止）",
+      "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」「お前」「あんた」「先輩」等。文章・セリフは禁止）",
       "appearance": "外見の特徴",
       "personality": "性格・口調の特徴",
-      "background": "経歴・背景設定"
+      "background": "経歴・背景設定",
+      "illustrationPrompt": "画像生成AI用の英語タグ（例: 1boy, black hair, chef apron, anime style / 1girl, silver hair, priestess robe, anime style）"
     }
   ],
   "worldBuilding": [
@@ -316,19 +317,30 @@ ${this.buildBibleContext(bible, glossary)}
       if (Array.isArray(rawChars)) {
         rawChars.forEach((c: any) => {
           if (!c.name || !c.name.trim() || NovelEngine.isJunkTitle(c.name)) return;
-          const cleanName = c.name.trim();
+          const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name);
           if (!initialBible.characters.some((ex) => ex.name.trim() === cleanName)) {
+            const role = c.role || extractedRole || '主要登場人物';
+            const firstPerson = NovelEngine.sanitizePronoun(c.firstPerson, '私', false);
+            const secondPerson = NovelEngine.sanitizePronoun(c.secondPerson, 'あなた', true);
+            const appearance = c.appearance || '初期プロットにて設定';
+            const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
+              name: cleanName,
+              appearance,
+              role,
+              illustrationPrompt: c.illustrationPrompt,
+            });
+
             initialBible.characters.push({
               id: `char-init-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
               name: cleanName,
               ruby: NovelEngine.toHiragana(c.ruby || ''),
-              role: c.role || '主要登場人物',
-              firstPerson: c.firstPerson || '私',
-              secondPerson: c.secondPerson || 'あなた',
-              appearance: c.appearance || '初期プロットにて設定',
+              role,
+              firstPerson,
+              secondPerson,
+              appearance,
               personality: c.personality || '初期プロットにて設定',
               background: c.background || '初期プロットにて設定',
-              illustrationPrompt: `${cleanName}, anime style character`,
+              illustrationPrompt,
               updatedEpisode: '【初期プロット策定時】',
             });
           }
@@ -441,14 +453,15 @@ JSON構造:
 {
   "characters": [
     {
-      "name": "キャラクター名",
-      "ruby": "ふりがな",
+      "name": "キャラクター名（本名のみ。「（主人公）」等の注釈カッコ不可）",
+      "ruby": "ふりがな（ひらがな）",
       "role": "役割・職業",
-      "firstPerson": "一人称",
-      "secondPerson": "二人称",
+      "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」「僕」等。文章不可）",
+      "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」「お前」等。文章不可）",
       "appearance": "外見の特徴",
       "personality": "性格・口調の特徴",
-      "background": "背景設定"
+      "background": "背景設定",
+      "illustrationPrompt": "画像生成AI用の英語タグ（例: 1girl, silver hair, priestess robe, anime style）"
     }
   ],
   "worldBuilding": [
@@ -488,19 +501,30 @@ ${chapterSummaries}
     if (Array.isArray(rawChars)) {
       rawChars.forEach((c: any) => {
         if (!c.name || !c.name.trim() || NovelEngine.isJunkTitle(c.name)) return;
-        const cleanName = c.name.trim();
+        const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name);
         if (!updatedBible.characters.some((ex) => ex.name.trim() === cleanName)) {
+          const role = c.role || extractedRole || '主要登場人物';
+          const firstPerson = NovelEngine.sanitizePronoun(c.firstPerson, '私', false);
+          const secondPerson = NovelEngine.sanitizePronoun(c.secondPerson, 'あなた', true);
+          const appearance = c.appearance || 'プロット分析より自動策定';
+          const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
+            name: cleanName,
+            appearance,
+            role,
+            illustrationPrompt: c.illustrationPrompt,
+          });
+
           updatedBible.characters.push({
             id: `char-auto-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
             name: cleanName,
             ruby: NovelEngine.toHiragana(c.ruby || ''),
-            role: c.role || '主要登場人物',
-            firstPerson: c.firstPerson || '私',
-            secondPerson: c.secondPerson || 'あなた',
-            appearance: c.appearance || 'プロット分析より自動策定',
+            role,
+            firstPerson,
+            secondPerson,
+            appearance,
             personality: c.personality || 'プロット分析より自動策定',
             background: c.background || 'プロット分析より自動策定',
-            illustrationPrompt: `${cleanName}, fantasy character`,
+            illustrationPrompt,
             updatedEpisode: '【プロット分析設定】',
           });
           importedCount++;
@@ -849,7 +873,7 @@ ${draftContent.slice(0, 3000)}
 
 {
   "newCharacters": [
-    { "name": "キャラクター名", "ruby": "ふりがな", "role": "役割・職業", "firstPerson": "一人称", "secondPerson": "二人称", "appearance": "外見", "personality": "性格", "background": "背景" }
+    { "name": "キャラクターの本名（「（主人公）」等の注釈カッコ不可）", "ruby": "ふりがな（ひらがな）", "role": "役割・職業", "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」）", "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」）", "appearance": "外見", "personality": "性格", "background": "背景", "illustrationPrompt": "画像生成AI用の英語タグ（例: 1girl, silver hair, anime style）" }
   ],
   "updatedCharacters": [
     { "name": "既存キャラ名", "updateNote": "新しく判明した事実や変化の説明" }
@@ -909,21 +933,32 @@ ${draftContent.slice(0, 10000)}
       if (delta.newCharacters && delta.newCharacters.length > 0) {
         delta.newCharacters.forEach((c) => {
           if (!c.name || !c.name.trim() || NovelEngine.isJunkTitle(c.name)) return;
-          const cleanName = c.name.trim();
+          const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name);
           const exists = updatedBible.characters.some((ex) => ex.name.trim() === cleanName);
           if (exists) return;
+
+          const role = c.role || extractedRole || '登場人物';
+          const firstPerson = NovelEngine.sanitizePronoun(c.firstPerson || '', '私', false);
+          const secondPerson = NovelEngine.sanitizePronoun(c.secondPerson || '', 'あなた', true);
+          const appearance = `${episodeTag} ${c.appearance || '情報なし'}`;
+          const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
+            name: cleanName,
+            appearance,
+            role,
+            illustrationPrompt: c.illustrationPrompt,
+          });
 
           const newChar: CharacterSetting = {
             id: `char-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
             name: cleanName,
             ruby: NovelEngine.toHiragana(c.ruby || ''),
-            role: c.role || '登場人物',
-            firstPerson: c.firstPerson || '私',
-            secondPerson: c.secondPerson || 'あなた',
-            appearance: `${episodeTag} ${c.appearance || '情報なし'}`,
+            role,
+            firstPerson,
+            secondPerson,
+            appearance,
             personality: `${episodeTag} ${c.personality || '情報なし'}`,
             background: `${episodeTag} ${c.background || '情報なし'}`,
-            illustrationPrompt: `${cleanName}, fantasy character`,
+            illustrationPrompt,
             updatedEpisode: episodeTag
           };
           updatedBible.characters.push(newChar);
@@ -1155,6 +1190,96 @@ ${draftContent.slice(0, 10000)}
   }
 
   /**
+   * キャラクター名からカッコ付きの注釈（「（主人公）」など）を取り除く
+   */
+  public static sanitizeCharacterName(rawName: string): { cleanName: string; extractedRole?: string } {
+    if (!rawName) return { cleanName: '' };
+    let name = rawName.trim();
+    const match = name.match(/^(.+?)[（\(](.+?)[）\)]$/);
+    if (match) {
+      return {
+        cleanName: match[1].trim(),
+        extractedRole: match[2].trim(),
+      };
+    }
+    return { cleanName: name };
+  }
+
+  /**
+   * 一人称・二人称を「俺」「私」「君」などのシンプルな代名詞に補正する
+   */
+  public static sanitizePronoun(raw: string, defaultPronoun: string, isSecondPerson = false): string {
+    if (!raw || !raw.trim()) return defaultPronoun;
+    let text = raw.trim();
+
+    // 文章・セリフが入力されている場合の代名詞抽出
+    if (text.length > 8 || /[。！？!？「」『』\n]/.test(text)) {
+      if (!isSecondPerson) {
+        const fpMatch = text.match(/(私|俺|僕|わし|自分|我|あたい|わたくし|余|拙者|ミー|おいら|うち|ボク|オレ|ワタシ)/);
+        if (fpMatch) return fpMatch[1];
+      } else {
+        const spMatch = text.match(/(あなた|君|お前|あんた|貴様|先輩|おぬし|お前さん|きみ|アナタ|オマエ|マスター|プロデューサー|主様|旦那)/);
+        if (spMatch) return spMatch[1];
+      }
+      // 代名詞が見つからない場合、カギカッコや句点を除去して最初の単語を取得
+      text = text.replace(/^[「『]/, '').replace(/[。！？!？「」『』\n].*$/, '').trim();
+      const particleMatch = text.match(/^([^\sはがをもにでねよか]+)/);
+      if (particleMatch && particleMatch[1].length <= 6) {
+        return particleMatch[1];
+      }
+    }
+
+    // 「俺は」「あなたは」などの助詞を除去
+    if (text.length <= 8) {
+      const cleanParticle = text.replace(/(?:は|が|の|を|に|で|よ|ね)$/, '');
+      if (cleanParticle.length >= 1) return cleanParticle;
+    }
+
+    return text.slice(0, 8);
+  }
+
+  /**
+   * キャラクターの外見・役割から画像生成AI用の英語タグ (illustrationPrompt) を自動構築
+   */
+  public static buildIllustrationPrompt(c: { name: string; appearance?: string; role?: string; illustrationPrompt?: string }): string {
+    let prompt = (c.illustrationPrompt || '').trim();
+    prompt = prompt.replace(/[（\(].*?[）\)]/g, '').trim();
+
+    // すでに適切な英語タグが含まれている場合
+    if (prompt && /[a-zA-Z]{3,}/.test(prompt) && !/[\u3000-\u30fe\u4e00-\u9fa5]/.test(prompt)) {
+      return prompt;
+    }
+
+    const { cleanName } = this.sanitizeCharacterName(c.name);
+    const textToAnalyze = `${c.role || ''} ${c.appearance || ''} ${cleanName}`;
+    const baseTags: string[] = [];
+
+    if (/(?:女|少女|ヒロイン|聖女|魔導士|魔女|回復|妹|姫|女性)/.test(textToAnalyze)) {
+      baseTags.push('1girl');
+    } else if (/(?:男|少年|青年|主人公|料理人|シェフ|騎士|戦士|ライバル|男性)/.test(textToAnalyze)) {
+      baseTags.push('1boy');
+    } else {
+      baseTags.push('1person');
+    }
+
+    if (/(?:銀髪|白髪)/.test(textToAnalyze)) baseTags.push('silver hair');
+    else if (/(?:金髪)/.test(textToAnalyze)) baseTags.push('blonde hair');
+    else if (/(?:黒髪)/.test(textToAnalyze)) baseTags.push('black hair');
+    else if (/(?:赤髪)/.test(textToAnalyze)) baseTags.push('red hair');
+    else if (/(?:茶髪)/.test(textToAnalyze)) baseTags.push('brown hair');
+    else if (/(?:青髪)/.test(textToAnalyze)) baseTags.push('blue hair');
+
+    if (/(?:聖女|回復|修道女|癒やし)/.test(textToAnalyze)) baseTags.push('priestess robe');
+    else if (/(?:料理人|シェフ|パスタ)/.test(textToAnalyze)) baseTags.push('chef apron, casual clothes');
+    else if (/(?:騎士|戦士|ライバル|甲冑|鎧|剣士)/.test(textToAnalyze)) baseTags.push('armor, warrior outfit');
+    else if (/(?:魔術師|魔法使い|魔導)/.test(textToAnalyze)) baseTags.push('mage robe, magic user');
+
+    baseTags.push('anime style character');
+
+    return baseTags.join(', ');
+  }
+
+  /**
    * でたらめな文章断片・ゴミ設定を一括掃除・クリーンアップ
    */
   public static cleanJunkSettings(
@@ -1170,7 +1295,28 @@ ${draftContent.slice(0, 10000)}
     removedCount += (initialWbCount - cleanedBible.worldBuilding.length);
 
     const initialCharCount = cleanedBible.characters.length;
-    cleanedBible.characters = cleanedBible.characters.filter((c) => !this.isJunkTitle(c.name));
+    cleanedBible.characters = cleanedBible.characters
+      .filter((c) => !this.isJunkTitle(c.name))
+      .map((c) => {
+        const { cleanName, extractedRole } = this.sanitizeCharacterName(c.name);
+        const firstPerson = this.sanitizePronoun(c.firstPerson, '私', false);
+        const secondPerson = this.sanitizePronoun(c.secondPerson, 'あなた', true);
+        const illustrationPrompt = this.buildIllustrationPrompt({
+          name: cleanName,
+          appearance: c.appearance,
+          role: c.role || extractedRole,
+          illustrationPrompt: c.illustrationPrompt,
+        });
+
+        return {
+          ...c,
+          name: cleanName,
+          role: c.role || extractedRole || '登場人物',
+          firstPerson,
+          secondPerson,
+          illustrationPrompt,
+        };
+      });
     removedCount += (initialCharCount - cleanedBible.characters.length);
 
     const initialGeoCount = cleanedBible.geography.length;
@@ -1247,18 +1393,27 @@ ${draftContent.slice(0, 10000)}
         if (!name || NovelEngine.isJunkTitle(name)) return;
 
         if (log.includes('キャラクター') || log.includes('人物') || log.includes('登場人物')) {
-          if (!updatedBible.characters.some((c) => c.name.trim() === name)) {
+          const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(name);
+          if (!updatedBible.characters.some((c) => c.name.trim() === cleanName)) {
+            const role = extractedRole || '登場人物';
+            const appearance = `${episodeTag} 原稿ログより自動復元登録`;
+            const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
+              name: cleanName,
+              appearance,
+              role,
+            });
+
             updatedBible.characters.push({
               id: `char-log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              name,
+              name: cleanName,
               ruby: '',
-              role: '登場人物',
+              role,
               firstPerson: '私',
               secondPerson: 'あなた',
-              appearance: `${episodeTag} 原稿ログより自動復元登録`,
+              appearance,
               personality: '未設定',
               background: `${episodeTag} 原稿本文に登場`,
-              illustrationPrompt: `${name}, fantasy character`,
+              illustrationPrompt,
               updatedEpisode: episodeTag,
             });
             importedCount++;
@@ -1426,21 +1581,30 @@ ${draftContent.slice(0, 10000)}
         for (const match of speakerMatches) {
           const name = match[1].trim();
           if (name.length >= 2 && !ignoreList.includes(name) && !NovelEngine.isJunkTitle(name)) {
-            if (!updatedBible.characters.some((c) => c.name.includes(name))) {
+            const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(name);
+            if (!updatedBible.characters.some((c) => c.name.includes(cleanName))) {
+              const role = extractedRole || '登場人物';
+              const appearance = `${episodeTag} 原稿セリフより自動抽出`;
+              const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
+                name: cleanName,
+                appearance,
+                role,
+              });
+
               updatedBible.characters.push({
                 id: `char-fast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-                name: name,
+                name: cleanName,
                 ruby: '',
-                role: '登場人物',
+                role,
                 firstPerson: '私',
                 secondPerson: 'あなた',
-                appearance: `${episodeTag} 原稿セリフより自動抽出`,
+                appearance,
                 personality: '未設定',
                 background: `${episodeTag} 原稿本文に登場`,
-                illustrationPrompt: `${name}, fantasy character`,
+                illustrationPrompt,
                 updatedEpisode: episodeTag,
               });
-              logs.push(`[設定資料集 自動登録] キャラクター「${name}」を登録しました。${episodeTag}`);
+              logs.push(`[設定資料集 自動登録] キャラクター「${cleanName}」を登録しました。${episodeTag}`);
               importedCount++;
             }
           }

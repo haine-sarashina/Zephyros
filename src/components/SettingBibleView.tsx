@@ -44,20 +44,17 @@ export const SettingBibleView: React.FC<SettingBibleViewProps> = ({
 
   // でたらめな文章断片・ゴミ設定を手動で一括削除・掃除
   const handleCleanJunk = () => {
-    if (!glossary) return;
-    const { cleanedBible, cleanedGlossary, removedCount } = NovelEngine.cleanJunkSettings(bibleState, glossary);
-    if (removedCount > 0) {
-      setBibleState(cleanedBible);
-      if (onSaveBibleAndGlossary) {
-        onSaveBibleAndGlossary(cleanedBible, cleanedGlossary);
-      } else {
-        onSave(cleanedBible);
-        if (onSaveGlossary) onSaveGlossary(cleanedGlossary);
-      }
-      alert(`🧹 会話フレーズや文章断片などのゴミ設定 ${removedCount} 件を掃除・削除しました！`);
+    const dummyGlossary: Glossary = glossary || { terms: [], rubies: [] };
+    const { cleanedBible, cleanedGlossary, removedCount } = NovelEngine.cleanJunkSettings(bibleState, dummyGlossary);
+
+    setBibleState(cleanedBible);
+    if (onSaveBibleAndGlossary) {
+      onSaveBibleAndGlossary(cleanedBible, cleanedGlossary);
     } else {
-      alert('ゴミ設定・文章断片は検出されませんでした。すべて正常な設定項目です。');
+      onSave(cleanedBible);
+      if (onSaveGlossary && glossary) onSaveGlossary(cleanedGlossary);
     }
+    alert(`🧹 ゴミ設定の掃除と、登場人物の一人称・二人称・挿絵タグの自動整形を完了しました！ (${removedCount > 0 ? `${removedCount}件のゴミ削除・` : ''}整形完了)`);
   };
 
   const handleSave = () => {
@@ -89,10 +86,25 @@ export const SettingBibleView: React.FC<SettingBibleViewProps> = ({
 
   const handleSaveChar = () => {
     if (!editingCharacter || !editingCharacter.name.trim()) return;
-    const exists = bibleState.characters.some((c) => c.id === editingCharacter.id);
+    const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(editingCharacter.name);
+    const sanitizedChar: CharacterSetting = {
+      ...editingCharacter,
+      name: cleanName,
+      role: editingCharacter.role || extractedRole || '主要登場人物',
+      firstPerson: NovelEngine.sanitizePronoun(editingCharacter.firstPerson, '私', false),
+      secondPerson: NovelEngine.sanitizePronoun(editingCharacter.secondPerson, 'あなた', true),
+      illustrationPrompt: NovelEngine.buildIllustrationPrompt({
+        name: cleanName,
+        appearance: editingCharacter.appearance,
+        role: editingCharacter.role || extractedRole,
+        illustrationPrompt: editingCharacter.illustrationPrompt,
+      }),
+    };
+
+    const exists = bibleState.characters.some((c) => c.id === sanitizedChar.id);
     const newChars = exists
-      ? bibleState.characters.map((c) => (c.id === editingCharacter.id ? editingCharacter : c))
-      : [...bibleState.characters, editingCharacter];
+      ? bibleState.characters.map((c) => (c.id === sanitizedChar.id ? sanitizedChar : c))
+      : [...bibleState.characters, sanitizedChar];
     const updated = { ...bibleState, characters: newChars };
     setBibleState(updated);
     onSave(updated);

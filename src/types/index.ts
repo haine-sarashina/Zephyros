@@ -142,6 +142,7 @@ export interface ExtractedSettingDelta {
     appearance?: string;
     personality?: string;
     background?: string;
+    illustrationPrompt?: string;
   }>;
   updatedCharacters?: Array<{
     name: string;

@@ -99,8 +99,8 @@ export class OllamaService {
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
-        num_ctx: 16384,
-        num_predict: 8192,
+        num_ctx: 32768,
+        num_predict: 16384,
       }
     };
 
@@ -158,8 +158,8 @@ export class OllamaService {
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
-        num_ctx: 16384,
-        num_predict: 8192,
+        num_ctx: 32768,
+        num_predict: 16384,
       }
     };
 

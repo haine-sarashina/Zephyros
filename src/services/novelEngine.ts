@@ -38,6 +38,62 @@ export class NovelEngine {
   }
 
   /**
+   * 途切れた未完成のJSON文字列を、直前の完結した要素まで巻戻してパース可能な状態に完全復元する
+   */
+  private static repairPartialJson(jsonStr: string): string {
+    let str = jsonStr.trim();
+    if (!str) return '{}';
+
+    try {
+      JSON.parse(str);
+      return str;
+    } catch (_) {}
+
+    for (let len = str.length; len > 10; len -= 5) {
+      let candidate = str.slice(0, len).trim();
+
+      candidate = candidate
+        .replace(/,[\s]*$/, '')
+        .replace(/:[\s]*$/, '')
+        .replace(/,\s*([\}\]])/g, '$1');
+
+      let candInString = false;
+      let candEscaped = false;
+      for (let i = 0; i < candidate.length; i++) {
+        const c = candidate[i];
+        if (c === '"' && !candEscaped) {
+          candInString = !candInString;
+        } else if (c === '\\' && !candEscaped) {
+          candEscaped = true;
+        } else {
+          candEscaped = false;
+        }
+      }
+      if (candInString) {
+        candidate += '"';
+      }
+
+      const openBraces = (candidate.match(/\{/g) || []).length;
+      const closeBraces = (candidate.match(/\}/g) || []).length;
+      const openBrackets = (candidate.match(/\[/g) || []).length;
+      const closeBrackets = (candidate.match(/\]/g) || []).length;
+
+      if (openBraces >= closeBraces && openBrackets >= closeBrackets) {
+        let testStr = candidate;
+        for (let i = 0; i < openBrackets - closeBrackets; i++) testStr += ']';
+        for (let i = 0; i < openBraces - closeBraces; i++) testStr += '}';
+
+        try {
+          JSON.parse(testStr);
+          return testStr;
+        } catch (_) {}
+      }
+    }
+
+    return str;
+  }
+
+  /**
    * 補助: LLMの生の返答から堅牢にJSONを抽出・復元・パース
    */
   private static cleanAndParseJson<T = any>(text: string): T {
@@ -61,26 +117,19 @@ export class NovelEngine {
       }
     }
 
-    // 3. 最も外側の波カッコ { ... } または 角カッコ [ ... ] の切り出し
+    // 3. 最も外側の波カッコ { または 角カッコ [ から開始
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
     let startIdx = -1;
-    let endIdx = -1;
 
     if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
       startIdx = firstBrace;
-      endIdx = cleaned.lastIndexOf('}');
     } else if (firstBracket !== -1) {
       startIdx = firstBracket;
-      endIdx = cleaned.lastIndexOf(']');
     }
 
     if (startIdx !== -1) {
-      if (endIdx > startIdx) {
-        cleaned = cleaned.slice(startIdx, endIdx + 1);
-      } else {
-        cleaned = cleaned.slice(startIdx);
-      }
+      cleaned = cleaned.slice(startIdx);
     }
 
     cleaned = cleaned.trim();
@@ -98,54 +147,18 @@ export class NovelEngine {
       try {
         return JSON.parse(repaired);
       } catch (e2) {
-        // 試行3: 改行・文字列未エスケープ・途切れJSONのスマート修復
-        let inString = false;
-        let escaped = false;
-        let safeChars: string[] = [];
-
-        for (let i = 0; i < repaired.length; i++) {
-          const char = repaired[i];
-          if (char === '"' && !escaped) {
-            inString = !inString;
-            safeChars.push(char);
-          } else if (char === '\\' && !escaped) {
-            escaped = true;
-            safeChars.push(char);
-          } else {
-            if (escaped) escaped = false;
-            if (inString && (char === '\n' || char === '\r')) {
-              safeChars.push(char === '\n' ? '\\n' : '\\r');
-            } else {
-              safeChars.push(char);
-            }
-          }
-        }
-
-        // 文字列が途中で切れている場合は閉じ引用符を追加
-        if (inString) {
-          safeChars.push('"');
-        }
-
-        let safeStr = safeChars.join('');
-
-        // カッコの開閉カウント・不足分を全自動で補填
-        const openBraces = (safeStr.match(/\{/g) || []).length;
-        const closeBraces = (safeStr.match(/\}/g) || []).length;
-        const openBrackets = (safeStr.match(/\[/g) || []).length;
-        const closeBrackets = (safeStr.match(/\]/g) || []).length;
-
-        for (let i = 0; i < openBrackets - closeBrackets; i++) safeStr += ']';
-        for (let i = 0; i < openBraces - closeBraces; i++) safeStr += '}';
-
+        // 試行3: 途切れたJSONのスマート巻戻し・自動復元 (repairPartialJson)
         try {
-          return JSON.parse(safeStr);
+          const partialFixed = this.repairPartialJson(repaired);
+          return JSON.parse(partialFixed);
         } catch (e3) {
-          // 試行4: 日本語のダブルクォーテーション「"」などの誤エスケープ修復
+          // 試行4: 日本語のダブルクォーテーション「"」誤エスケープの補正＋巻戻し
           try {
-            let altFix = safeStr.replace(/([^\:\,\{\[\s])"([^\:\,\}\]\s])/g, '$1”$2');
-            return JSON.parse(altFix);
+            let altFix = repaired.replace(/([^\:\,\{\[\s])"([^\:\,\}\]\s])/g, '$1”$2');
+            const altPartial = this.repairPartialJson(altFix);
+            return JSON.parse(altPartial);
           } catch (e4) {
-            console.error('All JSON parse attempts failed:', { text, cleaned, safeStr });
+            console.error('All JSON parse attempts failed:', { text: text.slice(0, 500), cleaned: cleaned.slice(0, 500) });
             throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました。応答長: ${text.length}字`);
           }
         }

@@ -36,6 +36,28 @@ fn load_app_state(app: tauri::AppHandle) -> Result<AppWindowState, String> {
     }
 }
 
+fn projects_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    Ok(config_dir.join("projects.json"))
+}
+
+#[tauri::command]
+fn load_disk_projects(app: tauri::AppHandle) -> Result<String, String> {
+    let path = projects_path(&app)?;
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("[]".to_string())
+    }
+}
+
+#[tauri::command]
+fn save_disk_projects(app: tauri::AppHandle, json_data: String) -> Result<(), String> {
+    let path = projects_path(&app)?;
+    fs::write(&path, json_data).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn save_app_state(app: tauri::AppHandle, state: AppWindowState) -> Result<(), String> {
     let path = state_path(&app)?;
@@ -227,6 +249,8 @@ pub fn run() {
             greet,
             load_app_state,
             save_app_state,
+            load_disk_projects,
+            save_disk_projects,
             ollama_get_models,
             ollama_chat_raw,
             ollama_chat_stream_raw,

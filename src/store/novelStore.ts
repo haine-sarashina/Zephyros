@@ -124,7 +124,40 @@ const createDefaultSampleProject = (): Project => {
   };
 };
 
+import { invoke } from '@tauri-apps/api/core';
+
+const syncToDisk = (projects: Project[]) => {
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    invoke('save_disk_projects', { jsonData: JSON.stringify(projects, null, 2) }).catch((e) => {
+      console.warn('Failed to sync projects to disk:', e);
+    });
+  }
+};
+
 export class StoreManager {
+  /**
+   * ディスク (appData) からのプロジェクト読み込み & 連動同期
+   */
+  static async loadDiskProjectsAsync(): Promise<Project[]> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const raw = await invoke<string>('load_disk_projects');
+        if (raw && raw.trim() !== '' && raw.trim() !== '[]') {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(parsed));
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load projects from disk:', e);
+      }
+    }
+    const current = this.getProjects();
+    syncToDisk(current);
+    return current;
+  }
+
   /**
    * 全プロジェクトの取得
    */
@@ -157,6 +190,7 @@ export class StoreManager {
       const list = [initialProj];
       localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(list));
       localStorage.setItem(STORAGE_KEYS.ACTIVE_PROJECT_ID, initialProj.id);
+      syncToDisk(list);
       return list;
     }
 
@@ -223,6 +257,7 @@ export class StoreManager {
     const updatedList = [newProj, ...projects];
     localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updatedList));
     localStorage.setItem(STORAGE_KEYS.ACTIVE_PROJECT_ID, newProj.id);
+    syncToDisk(updatedList);
     return newProj;
   }
 
@@ -240,6 +275,7 @@ export class StoreManager {
       projects.unshift(project);
     }
     localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+    syncToDisk(projects);
   }
 
   /**
@@ -248,6 +284,7 @@ export class StoreManager {
   static deleteProject(id: string): void {
     const projects = this.getProjects().filter((p) => p.id !== id);
     localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+    syncToDisk(projects);
     if (this.getActiveProjectId() === id) {
       if (projects.length > 0) {
         localStorage.setItem(STORAGE_KEYS.ACTIVE_PROJECT_ID, projects[0].id);

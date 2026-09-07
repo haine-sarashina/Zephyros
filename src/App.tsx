@@ -122,18 +122,19 @@ export function App() {
     };
   }, []);
 
-  // 初回マウント時に全プロジェクト読み込み
+  // 初回マウント時に全プロジェクト読み込み（ディスクファイル projects.json と自動同期）
   useEffect(() => {
-    const loadedProjects = StoreManager.getProjects();
-    setProjects(loadedProjects);
-    let actId = StoreManager.getActiveProjectId();
-    if (!actId || !loadedProjects.some((p) => p.id === actId)) {
-      if (loadedProjects.length > 0) {
-        actId = loadedProjects[0].id;
-        StoreManager.setActiveProjectId(actId);
+    StoreManager.loadDiskProjectsAsync().then((loadedProjects) => {
+      setProjects(loadedProjects);
+      let actId = StoreManager.getActiveProjectId();
+      if (!actId || !loadedProjects.some((p) => p.id === actId)) {
+        if (loadedProjects.length > 0) {
+          actId = loadedProjects[0].id;
+          StoreManager.setActiveProjectId(actId);
+        }
       }
-    }
-    setActiveProjectId(actId);
+      setActiveProjectId(actId);
+    });
   }, []);
 
   const checkOllamaStatus = async () => {

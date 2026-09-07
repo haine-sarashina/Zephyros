@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getVersion } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -60,6 +61,10 @@ export function App() {
 
   // ウィンドウ位置・サイズの復元
   useEffect(() => {
+    getVersion().then((ver) => {
+      getCurrentWindow().setTitle(`Zephyros v${ver} - 小説自動生成`).catch(() => {});
+    }).catch(() => {});
+
     invoke<AppWindowState>("load_app_state")
       .then(async (state) => {
         const win = getCurrentWindow();

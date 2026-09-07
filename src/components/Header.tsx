@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { getVersion } from '@tauri-apps/api/app';
 import { ActiveTab } from '../types';
 import { ArrowLeft, Settings, Bot, Sparkles, BookOpen, BookMarked, Cpu, FileText } from 'lucide-react';
 
@@ -19,6 +20,12 @@ export const Header: React.FC<HeaderProps> = ({
   ollamaConnected,
   onCheckOllama,
 }) => {
+  const [version, setVersion] = useState<string>('0.1.0');
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
+
   const getTabTitle = (tab: ActiveTab): { label: string; icon: React.ReactNode } => {
     switch (tab) {
       case 'projects':
@@ -54,9 +61,14 @@ export const Header: React.FC<HeaderProps> = ({
             <Bot className="w-6 h-6" />
           </div>
           <div className="text-left">
-            <h1 className="font-extrabold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400">
-              Zephyros
-            </h1>
+            <div className="flex items-baseline space-x-2">
+              <h1 className="font-extrabold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400">
+                Zephyros
+              </h1>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-700/50 font-semibold">
+                v{version}
+              </span>
+            </div>
             <p className="text-xs text-slate-400 truncate max-w-[200px]" title={activeProjectTitle}>
               {activeProjectTitle || '小説自動生成システム'}
             </p>

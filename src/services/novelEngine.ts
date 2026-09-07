@@ -94,6 +94,44 @@ export class NovelEngine {
   }
 
   /**
+   * 日本語文字列内の未エスケープの二重引用符 (") を ” に修正する
+   */
+  private static fixUnescapedQuotes(jsonStr: string): string {
+    let result: string[] = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < jsonStr.length; i++) {
+      const char = jsonStr[i];
+
+      if (char === '\\' && !escaped) {
+        escaped = true;
+        result.push(char);
+        continue;
+      }
+
+      if (char === '"' && !escaped) {
+        if (!inString) {
+          inString = true;
+          result.push(char);
+        } else {
+          const rest = jsonStr.slice(i + 1).trim();
+          if (/^(?:,|:|\}|\]|\n|\r|$)/.test(rest)) {
+            inString = false;
+            result.push(char);
+          } else {
+            result.push('”');
+          }
+        }
+      } else {
+        if (escaped) escaped = false;
+        result.push(char);
+      }
+    }
+    return result.join('');
+  }
+
+  /**
    * 補助: LLMの生の返答から堅牢にJSONを抽出・復元・パース
    */
   private static cleanAndParseJson<T = any>(text: string): T {
@@ -138,8 +176,8 @@ export class NovelEngine {
     try {
       return JSON.parse(cleaned);
     } catch (e1) {
-      // 試行2: 末尾カンマ、コメント、非表示制御文字の除去
-      let repaired = cleaned
+      // 試行2: 日本語文字列内の内部引用符修正 ＋ 末尾カンマ・コメント・制御文字除去
+      let repaired = this.fixUnescapedQuotes(cleaned)
         .replace(/,\s*([\}\]])/g, '$1')
         .replace(/\/\/.*/g, '')
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
@@ -152,11 +190,10 @@ export class NovelEngine {
           const partialFixed = this.repairPartialJson(repaired);
           return JSON.parse(partialFixed);
         } catch (e3) {
-          // 試行4: 日本語のダブルクォーテーション「"」誤エスケープの補正＋巻戻し
+          // 試行4: 原本に対する部分修復
           try {
-            let altFix = repaired.replace(/([^\:\,\{\[\s])"([^\:\,\}\]\s])/g, '$1”$2');
-            const altPartial = this.repairPartialJson(altFix);
-            return JSON.parse(altPartial);
+            const rawPartial = this.repairPartialJson(cleaned);
+            return JSON.parse(rawPartial);
           } catch (e4) {
             console.error('All JSON parse attempts failed:', { text: text.slice(0, 500), cleaned: cleaned.slice(0, 500) });
             throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました。応答長: ${text.length}字`);
@@ -255,15 +292,19 @@ ${JSON.stringify(draftData, null, 2)}
 
     const systemPrompt = `あなたはプロの小説家・構成作家です。
 思考プロセス（<think>〜</think>）や解説テキストは出力せず、即座に指定されたJSONフォーマットのみを出力してください。
-与えられた「お題」「詳細指定」に基づいて、全${targetChapterCount}話の長編小説のタイトル、全体あらすじ、全${targetChapterCount}話の章題・各話あらすじ、および【主要登場人物】【世界観・品物設定】【地理・場所設定】【特殊用語】【ルビ表記】を策定してください。
+与えられた「お題」「詳細指定」に基づいて、全${targetChapterCount}話の長編小説のタイトル、全体あらすじ、全${targetChapterCount}話の章題・各話あらすじ、および【主要登場人物】【世界観・品物設定】【地理・場所設定】を策定してください。
 
-必ず以下のJSONフォーマットのみを出力してください。思考プロセスやMarkdown装飾は含めないでください。
+【出力要件】
+- 各話あらすじは1〜2文（80字〜150字程度）で簡潔に記述してください。
+- 主要登場人物は2〜4名、世界観設定・地名は各2〜3項目で構成してください。
+- ダブルクォーテーション「"」を文字列内部で使用する場合は「”」を使用するかエスケープしてください。
+- 必ずJSONフォーマットのみを出力してください。
 
 JSON構造:
 {
   "title": "作品タイトル",
   "subtitle": "サブタイトル",
-  "synopsis": "全体あらすじ（300字程度）",
+  "synopsis": "全体あらすじ（200字程度）",
   "outline": "全体プロット解説",
   "chapters": [
     {
@@ -274,15 +315,15 @@ JSON構造:
   ],
   "characters": [
     {
-      "name": "キャラクター名（本名のみ。例: タクマ。「（主人公）」などの注釈カッコは絶対含めない）",
-      "ruby": "ふりがな（ひらなが）",
-      "role": "役割（例: 主人公, ヒロイン, ライバル, 師匠など）",
-      "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」「僕」「わし」等。文章・セリフは禁止）",
-      "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」「お前」「あんた」「先輩」等。文章・セリフは禁止）",
+      "name": "キャラクター名（本名のみ。注釈カッコ不可）",
+      "ruby": "ふりがな（ひらがな）",
+      "role": "役割（例: 主人公, ヒロイン, ライバルなど）",
+      "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」「僕」）",
+      "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」「お前」）",
       "appearance": "外見の特徴",
       "personality": "性格・口調の特徴",
       "background": "経歴・背景設定",
-      "illustrationPrompt": "画像生成AI用の英語タグ（例: 1boy, black hair, chef apron, anime style / 1girl, silver hair, priestess robe, anime style）"
+      "illustrationPrompt": "画像生成AI用の英語タグ（例: 1boy, black hair, chef apron, anime style）"
     }
   ],
   "worldBuilding": [
@@ -296,19 +337,6 @@ JSON構造:
     {
       "name": "主要な舞台・地名・施設名",
       "description": "場所の説明"
-    }
-  ],
-  "terms": [
-    {
-      "term": "作品固有の固有名詞・造語",
-      "reading": "よみがな",
-      "description": "用語の説明"
-    }
-  ],
-  "rubies": [
-    {
-      "kanji": "対象の漢字",
-      "ruby": "ルビ"
     }
   ]
 }`;

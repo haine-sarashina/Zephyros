@@ -22,11 +22,8 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
     try {
       const models = await OllamaService.getModels(url);
       setAvailableModels(models);
-      if (models.length > 0) {
-        setConnectionStatus('success');
-      } else {
-        setConnectionStatus('error');
-      }
+      const isConnected = models.length > 0 || (await OllamaService.isServerConnected(url));
+      setConnectionStatus(isConnected ? 'success' : 'error');
     } catch (e) {
       console.error(e);
       setConnectionStatus('error');

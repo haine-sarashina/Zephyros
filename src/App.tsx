@@ -138,8 +138,8 @@ export function App() {
 
   const checkOllamaStatus = async () => {
     try {
-      const models = await OllamaService.getModels(aiSettings.ollamaUrl);
-      setOllamaConnected(models.length > 0);
+      const connected = await OllamaService.isServerConnected(aiSettings.ollamaUrl);
+      setOllamaConnected(connected);
     } catch {
       setOllamaConnected(false);
     }

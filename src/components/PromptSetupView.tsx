@@ -68,6 +68,9 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
     const systemPrompt = `あなたはプロのライトノベル作家・アイデア発想AIです。
 ユーザーが指定した【お題キーワード】を全て活かし、日本語として自然で美しく、読者がワクワクする長編小説の「メインコンセプト（キャッチコピー）」と「あらすじ」を創作してください。
 
+【重要制約】
+・お題キーワードに指定された要素のみを軸にし、キーワードに含まれていないメタ単語（「ガチャ」等）を勝手にストーリーのテーマや作中設定として挿入しないでください。
+
 必ず以下のJSON形式のみを出力してください。思考プロセス(<think>)や解説、Markdown装飾は含めないでください。
 
 {
@@ -78,7 +81,7 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
     const userPrompt = `【お題キーワード】: ${themes.join(', ')}
 
 上記のお題をすべて自然に組み込んだ、オリジナルで魅力的な物語を1案作成してください。
-ガチャを押すたびに毎回異なるジャンル感（コメディ、バトルファンタジー、スローライフ、ミステリー、日常系など）や展開のアイデアにしてください。`;
+実行するたびに異なる切り口やジャンル感（コメディ、バトルファンタジー、スローライフ、ミステリー、日常系など）、展開のアイデアにしてください。`;
 
     try {
       const rawResponse = await OllamaService.chat(baseUrl, model, systemPrompt, userPrompt, 0.85);

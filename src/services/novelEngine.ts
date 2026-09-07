@@ -45,31 +45,60 @@ export class NovelEngine {
       throw new Error('LLMからの応答が空でした。');
     }
 
-    let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    // 1. 思考プロセス (<think>...</think>, <thought>..., <reasoning>...) の徹底除去
+    let cleaned = text
+      .replace(/<(?:think|thought|reasoning|details)>[\s\S]*?<\/(?:think|thought|reasoning|details)>/gi, '')
+      .replace(/<(?:think|thought|reasoning|details)>[\s\S]*$/gi, ''); // 未閉じ思考タグの末尾削除
+
+    // 2. Markdownコードブロック ```json ... ``` の抽出
     const markdownMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
     if (markdownMatch) {
       cleaned = markdownMatch[1];
+    } else {
+      const startMatch = cleaned.match(/```(?:json)?\s*([\s\S]*)$/i);
+      if (startMatch) {
+        cleaned = startMatch[1];
+      }
     }
 
+    // 3. 最も外側の波カッコ { ... } または 角カッコ [ ... ] の切り出し
     const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    const firstBracket = cleaned.indexOf('[');
+    let startIdx = -1;
+    let endIdx = -1;
+
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIdx = firstBrace;
+      endIdx = cleaned.lastIndexOf('}');
+    } else if (firstBracket !== -1) {
+      startIdx = firstBracket;
+      endIdx = cleaned.lastIndexOf(']');
     }
+
+    if (startIdx !== -1) {
+      if (endIdx > startIdx) {
+        cleaned = cleaned.slice(startIdx, endIdx + 1);
+      } else {
+        cleaned = cleaned.slice(startIdx);
+      }
+    }
+
+    cleaned = cleaned.trim();
 
     // 試行1: 通常パース
     try {
       return JSON.parse(cleaned);
     } catch (e1) {
-      // 試行2: 末尾カンマ補正、制御文字除去
+      // 試行2: 末尾カンマ、コメント、非表示制御文字の除去
       let repaired = cleaned
         .replace(/,\s*([\}\]])/g, '$1')
+        .replace(/\/\/.*/g, '')
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
       try {
         return JSON.parse(repaired);
       } catch (e2) {
-        // 試行3: 文字列内の未エスケープ改行の補正
+        // 試行3: 改行・文字列未エスケープ・途切れJSONのスマート修復
         let inString = false;
         let escaped = false;
         let safeChars: string[] = [];
@@ -91,24 +120,34 @@ export class NovelEngine {
             }
           }
         }
+
+        // 文字列が途中で切れている場合は閉じ引用符を追加
+        if (inString) {
+          safeChars.push('"');
+        }
+
         let safeStr = safeChars.join('');
 
-        // 試行4: 閉じカッコ補正
-        if (!safeStr.endsWith('}')) {
-          const openBraces = (safeStr.match(/\{/g) || []).length;
-          const closeBraces = (safeStr.match(/\}/g) || []).length;
-          const openBrackets = (safeStr.match(/\[/g) || []).length;
-          const closeBrackets = (safeStr.match(/\]/g) || []).length;
+        // カッコの開閉カウント・不足分を全自動で補填
+        const openBraces = (safeStr.match(/\{/g) || []).length;
+        const closeBraces = (safeStr.match(/\}/g) || []).length;
+        const openBrackets = (safeStr.match(/\[/g) || []).length;
+        const closeBrackets = (safeStr.match(/\]/g) || []).length;
 
-          for (let i = 0; i < openBrackets - closeBrackets; i++) safeStr += ']';
-          for (let i = 0; i < openBraces - closeBraces; i++) safeStr += '}';
-        }
+        for (let i = 0; i < openBrackets - closeBrackets; i++) safeStr += ']';
+        for (let i = 0; i < openBraces - closeBraces; i++) safeStr += '}';
 
         try {
           return JSON.parse(safeStr);
         } catch (e3) {
-          console.error('All JSON parse attempts failed:', { text, cleaned, safeStr });
-          throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました。`);
+          // 試行4: 日本語のダブルクォーテーション「"」などの誤エスケープ修復
+          try {
+            let altFix = safeStr.replace(/([^\:\,\{\[\s])"([^\:\,\}\]\s])/g, '$1”$2');
+            return JSON.parse(altFix);
+          } catch (e4) {
+            console.error('All JSON parse attempts failed:', { text, cleaned, safeStr });
+            throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました。応答長: ${text.length}字`);
+          }
         }
       }
     }
@@ -271,10 +310,26 @@ ${this.buildBibleContext(bible, glossary)}
 
 上記設定を踏まえ、全${targetChapterCount}話構成のプロットと初期設定集（登場人物・世界観・地名・特殊用語・ルビ表記）を作成してください。`;
 
-    const rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.3, signal, true);
+    let rawResponse = '';
+    try {
+      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.3, signal, true);
+    } catch (e: any) {
+      if (signal?.aborted) throw e;
+      console.warn('Ollama chat with formatJson failed, retrying with raw text mode:', e);
+      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false);
+    }
 
     try {
-      let parsed = this.cleanAndParseJson(rawResponse);
+      let parsed: any;
+      try {
+        parsed = this.cleanAndParseJson(rawResponse);
+      } catch (parseErr) {
+        if (signal?.aborted) throw parseErr;
+        // JSON形式強制(format:json)によりモデルの応答が崩れた場合のリカバリ
+        if (onProgress) onProgress('モデル応答修復中... 標準テキストモードでプロットJSONを自動復元しています');
+        const fallbackRaw = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false);
+        parsed = this.cleanAndParseJson(fallbackRaw);
+      }
 
       if (editorModel && editorModel.trim()) {
         parsed = await this.proofreadOutlineAndSettings(baseUrl, editorModel, parsed, onProgress, signal);
@@ -491,8 +546,22 @@ ${chapterSummaries}
 
 上記プロットから、主要登場人物（2〜5名）、キーアイテム/世界観設定（2〜5件）、主要地名（1〜3件）を作成し、JSON形式で返してください。`;
 
-    const rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.5, signal, true);
-    const parsed = this.cleanAndParseJson(rawResponse);
+    let rawResponse = '';
+    try {
+      rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.5, signal, true);
+    } catch (e: any) {
+      if (signal?.aborted) throw e;
+      rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.5, signal, false);
+    }
+
+    let parsed: any;
+    try {
+      parsed = this.cleanAndParseJson(rawResponse);
+    } catch (parseErr) {
+      if (signal?.aborted) throw parseErr;
+      const fallbackRaw = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.5, signal, false);
+      parsed = this.cleanAndParseJson(fallbackRaw);
+    }
 
     const updatedBible: SettingBible = JSON.parse(JSON.stringify(currentBible));
     let importedCount = 0;

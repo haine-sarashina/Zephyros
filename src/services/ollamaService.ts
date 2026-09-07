@@ -1,78 +1,84 @@
-// Ollama API 通信サービス (堅牢なストリームバッファリング、IPv4/IPv6フォールバック & オプション設定)
+// Ollama API 通信サービス (Tauri Rust プロキシ、CORS回避 & 行バッファ処理付き)
+
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 export interface OllamaModelInfo {
   name: string;
   size: number;
-  digest: string;
-  modified_at: string;
+  digest?: string;
+  modified_at?: string;
 }
 
 export class OllamaService {
   /**
-   * エンドポイントURLの正規化ヘルパー (末尾スラスラ除去 & http:// 補填)
+   * Tauri 環境かどうかの判定
    */
-  static cleanUrl(baseUrl: string = 'http://localhost:11434'): string {
-    if (!baseUrl || !baseUrl.trim()) return 'http://localhost:11434';
-    let url = baseUrl.trim().replace(/\/+$/, '');
-    if (!/^https?:\/\//i.test(url)) {
-      url = `http://${url}`;
-    }
-    return url;
+  private static isTauriAvailable(): boolean {
+    return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   }
 
   /**
-   * localhost / 127.0.0.1 の互換フォールバックURLリストの生成
-   */
-  static getFallbackUrls(baseUrl: string): string[] {
-    const primary = this.cleanUrl(baseUrl);
-    const urls = [primary];
-    if (primary.includes('localhost')) {
-      urls.push(primary.replace('localhost', '127.0.0.1'));
-    } else if (primary.includes('127.0.0.1')) {
-      urls.push(primary.replace('127.0.0.1', 'localhost'));
-    }
-    return urls;
-  }
-
-  /**
-   * Ollama サーバーとの接続状態確認 (/api/version または /api/tags の死活監視)
+   * Ollama サーバーの稼働状態確認 (/api/version または /api/tags 死活判定)
    */
   static async isServerConnected(baseUrl: string = 'http://localhost:11434'): Promise<boolean> {
-    const urls = this.getFallbackUrls(baseUrl);
-    for (const url of urls) {
+    try {
+      const models = await this.getModels(baseUrl);
+      if (models.length > 0) return true;
+    } catch {}
+
+    // フェッチフォールバック
+    const cleanUrl = baseUrl ? baseUrl.trim().replace(/\/+$/, '') : 'http://localhost:11434';
+    const endpoints = [
+      `${cleanUrl}/api/version`,
+      cleanUrl.includes('localhost') ? `${cleanUrl.replace('localhost', '127.0.0.1')}/api/version` : `${cleanUrl.replace('127.0.0.1', 'localhost')}/api/version`
+    ];
+
+    for (const ep of endpoints) {
       try {
-        const response = await fetch(`${url}/api/version`);
-        if (response.ok) return true;
-      } catch {}
-      try {
-        const response = await fetch(`${url}/api/tags`);
-        if (response.ok) return true;
+        const res = await fetch(ep);
+        if (res.ok) return true;
       } catch {}
     }
+
     return false;
   }
 
   /**
-   * Ollama サーバーの利用可能モデル一覧の取得
+   * 利用可能モデルの取得 (Rust プロキシ優先)
    */
   static async getModels(baseUrl: string = 'http://localhost:11434'): Promise<OllamaModelInfo[]> {
-    const urls = this.getFallbackUrls(baseUrl);
-    for (const url of urls) {
+    if (this.isTauriAvailable()) {
       try {
-        const response = await fetch(`${url}/api/tags`);
-        if (response.ok) {
-          const data = await response.json();
+        const rawJson = await invoke<string>('ollama_get_models', { url: baseUrl });
+        const parsed = JSON.parse(rawJson);
+        return parsed.models || [];
+      } catch (e) {
+        console.warn('Tauri invoke ollama_get_models failed, falling back to browser fetch:', e);
+      }
+    }
+
+    // ブラウザモード / フォールバック
+    const cleanUrl = baseUrl ? baseUrl.trim().replace(/\/+$/, '') : 'http://localhost:11434';
+    const endpoints = [
+      `${cleanUrl}/api/tags`,
+      cleanUrl.includes('localhost') ? `${cleanUrl.replace('localhost', '127.0.0.1')}/api/tags` : `${cleanUrl.replace('127.0.0.1', 'localhost')}/api/tags`
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const res = await fetch(ep);
+        if (res.ok) {
+          const data = await res.json();
           return data.models || [];
         }
-      } catch (error) {
-        console.warn(`Failed to fetch Ollama models from ${url}:`, error);
-      }
+      } catch {}
     }
     return [];
   }
 
   /**
-   * 単発テキスト生成 (/api/chat)
+   * 単発テキスト生成 (/api/chat) (Rust プロキシ優先)
    */
   static async chat(
     baseUrl: string,
@@ -83,47 +89,54 @@ export class OllamaService {
     signal?: AbortSignal,
     formatJson: boolean = false
   ): Promise<string> {
-    const urls = this.getFallbackUrls(baseUrl);
-    let lastError: any = null;
+    const bodyObj = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      stream: false,
+      ...(formatJson ? { format: 'json' } : {}),
+      options: {
+        temperature,
+        num_ctx: 16384,
+        num_predict: 8192,
+      }
+    };
 
-    for (const url of urls) {
+    if (this.isTauriAvailable()) {
       try {
-        const response = await fetch(`${url}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            stream: false,
-            ...(formatJson ? { format: 'json' } : {}),
-            options: {
-              temperature,
-              num_ctx: 16384,
-              num_predict: 8192,
-            }
-          }),
-          signal
+        const rawRes = await invoke<string>('ollama_chat_raw', {
+          url: baseUrl,
+          body: JSON.stringify(bodyObj)
         });
-
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Ollama Chat Error (${response.status}): ${errText}`);
-        }
-
-        const data = await response.json();
-        return data.message?.content || '';
-      } catch (error) {
-        lastError = error;
+        const parsed = JSON.parse(rawRes);
+        return parsed.message?.content || '';
+      } catch (e) {
+        console.warn('Tauri invoke ollama_chat_raw failed, falling back to fetch:', e);
       }
     }
-    throw lastError || new Error('Ollama サーバーへの接続に失敗しました。');
+
+    // ブラウザフェッチフォールバック
+    const cleanUrl = baseUrl.replace(/\/+$/, '');
+    const response = await fetch(`${cleanUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyObj),
+      signal
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Ollama Chat Error (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    return data.message?.content || '';
   }
 
   /**
-   * ストリーミングテキスト生成 (/api/chat) - 行バッファ処理付き
+   * ストリーミングテキスト生成 (/api/chat) (Rust プロキシ優先)
    */
   static async chatStream(
     baseUrl: string,
@@ -135,46 +148,57 @@ export class OllamaService {
     signal?: AbortSignal,
     formatJson: boolean = false
   ): Promise<string> {
-    const urls = this.getFallbackUrls(baseUrl);
-    let response: Response | null = null;
-    let lastError: any = null;
+    const bodyObj = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      stream: true,
+      ...(formatJson ? { format: 'json' } : {}),
+      options: {
+        temperature,
+        num_ctx: 16384,
+        num_predict: 8192,
+      }
+    };
 
-    for (const url of urls) {
+    if (this.isTauriAvailable()) {
+      const channelId = `ch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      let unlisten: (() => void) | null = null;
       try {
-        const res = await fetch(`${url}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            stream: true,
-            ...(formatJson ? { format: 'json' } : {}),
-            options: {
-              temperature,
-              num_ctx: 16384,
-              num_predict: 8192,
-            }
-          }),
-          signal
+        unlisten = await listen<string>(`ollama-chunk-${channelId}`, (event) => {
+          if (event.payload) {
+            onChunk(event.payload);
+          }
         });
 
-        if (res.ok) {
-          response = res;
-          break;
-        } else {
-          const errText = await res.text();
-          throw new Error(`Ollama Stream Error (${res.status}): ${errText}`);
-        }
-      } catch (err) {
-        lastError = err;
+        const fullText = await invoke<string>('ollama_chat_stream_raw', {
+          channelId,
+          url: baseUrl,
+          body: JSON.stringify(bodyObj)
+        });
+
+        return fullText;
+      } catch (e) {
+        console.warn('Tauri invoke ollama_chat_stream_raw failed, falling back to fetch:', e);
+      } finally {
+        if (unlisten) unlisten();
       }
     }
 
-    if (!response) {
-      throw lastError || new Error('Ollama サーバーへの接続に失敗しました。');
+    // ブラウザフェッチフォールバック
+    const cleanUrl = baseUrl.replace(/\/+$/, '');
+    const response = await fetch(`${cleanUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyObj),
+      signal
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Ollama Stream Error (${response.status}): ${errText}`);
     }
 
     if (!response.body) {
@@ -218,9 +242,7 @@ export class OllamaService {
           fullContent += text;
           onChunk(text);
         }
-      } catch {
-        // 無視
-      }
+      } catch {}
     }
 
     return fullContent;

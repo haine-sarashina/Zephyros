@@ -68,14 +68,23 @@ export interface Glossary {
   rubies: RubySetting[];
 }
 
+export interface ThinkCommandTargets {
+  gacha?: boolean; // お題ガチャ AI
+  outline?: boolean; // プロット作成 AI (執筆者AI)
+  outlineProofread?: boolean; // プロット校閲 AI (編集者AI)
+  write?: boolean; // 本文執筆 AI (執筆者AI)
+  proofread?: boolean; // 本文校閲 AI (編集者AI)
+}
+
 export interface AISettings {
   ollamaUrl: string; // デフォルト: http://localhost:11434
   writerModel: string; // 執筆者モデル (例: qwen2.5:32b, qwen3.8:27b)
   editorModel: string; // 編集者モデル (例: gemma2:27b, gemma4:31b)
   temperature: number; // 0.7
   topP: number;
-  thinkMode?: 'nothink' | 'think' | 'none'; // 思考プロンプト制御 ('nothink', 'think', 'none')
+  thinkMode?: 'nothink' | 'think' | 'none'; // レガシー互換
   keepAlive?: string; // ローカルAI常駐設定 ('-1', '5m', '10m', '30m', '60m', '0')
+  thinkCommandTargets?: ThinkCommandTargets; // 各AI呼び出し項目ごとの思考抑止(/nothink)チェックボックス設定
 }
 
 export interface ReviewComment {

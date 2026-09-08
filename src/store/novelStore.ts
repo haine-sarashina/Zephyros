@@ -110,6 +110,13 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   topP: 0.9,
   thinkMode: 'nothink',
   keepAlive: '-1',
+  thinkCommandTargets: {
+    gacha: true,
+    outline: true,
+    outlineProofread: true,
+    write: true,
+    proofread: true,
+  },
 };
 
 // 初期デフォルトプロジェクトの作成

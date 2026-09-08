@@ -803,7 +803,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
               editorLog.map((log, idx) => (
                 <div
                   key={idx}
-                  className={`p-2 rounded-lg leading-relaxed ${
+                  className={`p-2 rounded-lg leading-relaxed whitespace-pre-wrap break-words ${
                     log.includes('[エラー]')
                       ? 'bg-rose-950/70 border border-rose-800 text-rose-300'
                       : log.includes('[編集者AI]')

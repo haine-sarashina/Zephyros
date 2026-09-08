@@ -161,6 +161,96 @@ export class NovelEngine {
   }
 
   /**
+   * JSON文字列値内部の未エスケープの改行・タブ文字を \n や \t に変換する
+   */
+  private static fixUnescapedNewlinesInStringValues(jsonStr: string): string {
+    let result: string[] = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < jsonStr.length; i++) {
+      const char = jsonStr[i];
+
+      if (char === '\\' && !escaped) {
+        escaped = true;
+        result.push(char);
+        continue;
+      }
+
+      if (char === '"' && !escaped) {
+        inString = !inString;
+        result.push(char);
+        continue;
+      }
+
+      if (inString) {
+        if (char === '\n') {
+          result.push('\\n');
+        } else if (char === '\r') {
+          // skip CR
+        } else if (char === '\t') {
+          result.push('\\t');
+        } else {
+          result.push(char);
+        }
+      } else {
+        result.push(char);
+      }
+
+      if (escaped) escaped = false;
+    }
+    return result.join('');
+  }
+
+  /**
+   * JSONパース不可能な生のLLMテキストからプロット情報を正規表現で救出する最終フォールバック
+   */
+  private static extractOutlineFromRawText(text: string, _targetChapterCount: number = 12): any {
+    const titleMatch = text.match(/"title"\s*:\s*"([^"]+)"/) || text.match(/タイトル[：:]\s*([^\n]+)/);
+    const subtitleMatch = text.match(/"subtitle"\s*:\s*"([^"]+)"/);
+    const synopsisMatch = text.match(/"synopsis"\s*:\s*"([^"]+)"/) || text.match(/あらすじ[：:]\s*([^\n]+)/);
+
+    const title = titleMatch ? titleMatch[1] : '無題の物語';
+    const subtitle = subtitleMatch ? subtitleMatch[1] : '';
+    const synopsis = synopsisMatch ? synopsisMatch[1] : text.slice(0, 200).replace(/[\r\n]+/g, ' ');
+
+    const chapters: any[] = [];
+    const chapterMatches = text.matchAll(/\{\s*"id"\s*:\s*(\d+)\s*,\s*"title"\s*:\s*"([^"]+)"\s*(?:,\s*"synopsis"\s*:\s*"([^"]+)")?/g);
+    for (const m of chapterMatches) {
+      chapters.push({
+        id: parseInt(m[1], 10),
+        title: m[2],
+        synopsis: m[3] || ''
+      });
+    }
+
+    if (chapters.length === 0) {
+      const rawChapterMatches = text.matchAll(/(第\d+話[^\n:]*)[：:]?\s*([^\n]*)/g);
+      let idx = 1;
+      for (const m of rawChapterMatches) {
+        chapters.push({
+          id: idx++,
+          title: m[1].trim(),
+          synopsis: m[2].trim()
+        });
+      }
+    }
+
+    return {
+      title,
+      subtitle,
+      synopsis,
+      outline: synopsis,
+      chapters,
+      characters: [],
+      worldBuilding: [],
+      geography: [],
+      terms: [],
+      rubies: []
+    };
+  }
+
+  /**
    * 補助: LLMの生の返答から堅牢にJSONを抽出・復元・パース
    */
   private static cleanAndParseJson<T = any>(text: string): T {
@@ -206,19 +296,31 @@ export class NovelEngine {
       return JSON.parse(cleaned);
     } catch (_) {}
 
-    // 試行2: 内部引用符修正 ＋ 通常パース
-    const quoteFixed = this.fixUnescapedQuotes(cleaned);
+    // 試行2: 改行文字修正 ＋ 通常パース
+    const newlineFixed = this.fixUnescapedNewlinesInStringValues(cleaned);
+    try {
+      return JSON.parse(newlineFixed);
+    } catch (_) {}
+
+    // 試行3: 内部引用符修正 ＋ 通常パース
+    const quoteFixed = this.fixUnescapedQuotes(newlineFixed);
     try {
       return JSON.parse(quoteFixed);
     } catch (_) {}
 
-    // 試行3: スタックベースの途切れJSON復元 (repairPartialJson)
+    // 試行4: スタックベースの途切れJSON復元 (repairPartialJson)
     try {
       const repaired = this.repairPartialJson(cleaned);
       return JSON.parse(repaired);
     } catch (_) {}
 
-    // 試行4: 末尾カンマ・コメント・制御文字除去 ＋ スタック復元
+    // 試行5: 引用符・改行修正済みテキストに対するスタック復元
+    try {
+      const repairedQuote = this.repairPartialJson(quoteFixed);
+      return JSON.parse(repairedQuote);
+    } catch (_) {}
+
+    // 試行6: 末尾カンマ・コメント・制御文字除去 ＋ スタック復元
     const sanitized = quoteFixed
       .replace(/,\s*([\}\]])/g, '$1')
       .replace(/\/\/.*/g, '')
@@ -228,8 +330,12 @@ export class NovelEngine {
       return JSON.parse(finalRepaired);
     } catch (_) {}
 
-    console.error('All JSON parse attempts failed:', { text: text.slice(0, 500), cleaned: cleaned.slice(0, 500) });
-    throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました。応答長: ${text.length}字`);
+    const snippet = text.length > 600
+      ? `【応答冒頭200字】:\n${text.slice(0, 200)}\n...\n【応答末尾300字】:\n${text.slice(-300)}`
+      : `【応答全文】:\n${text}`;
+
+    console.error('All JSON parse attempts failed:', { length: text.length, snippet, rawText: text });
+    throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました（応答長: ${text.length}字）。\n${snippet}`);
   }
 
   /**
@@ -406,12 +512,19 @@ ${this.buildBibleContext(bible, glossary)}
       let parsed: any;
       try {
         parsed = this.cleanAndParseJson(rawResponse);
-      } catch (parseErr) {
+      } catch (parseErr: any) {
         if (signal?.aborted) throw parseErr;
         // JSON形式強制(format:json)によりモデルの応答が崩れた場合のリカバリ
         if (onProgress) onProgress('モデル応答修復中... 標準テキストモードでプロットJSONを自動復元しています');
-        const fallbackRaw = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false);
-        parsed = this.cleanAndParseJson(fallbackRaw);
+        try {
+          const fallbackRaw = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false);
+          parsed = this.cleanAndParseJson(fallbackRaw);
+        } catch (fallbackErr: any) {
+          if (signal?.aborted) throw fallbackErr;
+          console.warn('JSON cleanAndParseJson failed on fallbackRaw, attempting regex extraction:', fallbackErr);
+          if (onProgress) onProgress('パース不能テキストから正規表現抽出によりプロットを復元中...');
+          parsed = this.extractOutlineFromRawText(rawResponse || '', targetChapterCount);
+        }
       }
 
       if (editorModel && editorModel.trim()) {

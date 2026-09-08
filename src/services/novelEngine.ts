@@ -360,7 +360,8 @@ export class NovelEngine {
     editorModel: string,
     draftData: any,
     onProgress?: (msg: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    aiSettings?: any
   ): Promise<any> {
     if (onProgress) onProgress(`編集者AI (${editorModel}) がプロット構成案・ルビ・読みの整合性を検証中...`);
 
@@ -380,7 +381,7 @@ ${JSON.stringify(draftData, null, 2)}
 上記データに対する校閲・誤読修正を行い、修正後のJSONを出力してください。`;
 
     try {
-      const rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.2, signal, true);
+      const rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.2, signal, true, aiSettings);
       const parsed = this.cleanAndParseJson(rawResponse);
       return {
         title: parsed.title || draftData.title,
@@ -411,7 +412,8 @@ ${JSON.stringify(draftData, null, 2)}
     bible: SettingBible,
     glossary: Glossary,
     onProgress?: (msg: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    aiSettings?: any
   ): Promise<{
     title: string;
     subtitle: string;
@@ -501,11 +503,11 @@ ${this.buildBibleContext(bible, glossary)}
 
     let rawResponse = '';
     try {
-      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.3, signal, true);
+      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.3, signal, true, aiSettings);
     } catch (e: any) {
       if (signal?.aborted) throw e;
       console.warn('Ollama chat with formatJson failed, retrying with raw text mode:', e);
-      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false);
+      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false, aiSettings);
     }
 
     try {
@@ -517,7 +519,7 @@ ${this.buildBibleContext(bible, glossary)}
         // JSON形式強制(format:json)によりモデルの応答が崩れた場合のリカバリ
         if (onProgress) onProgress('モデル応答修復中... 標準テキストモードでプロットJSONを自動復元しています');
         try {
-          const fallbackRaw = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false);
+          const fallbackRaw = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false, aiSettings);
           parsed = this.cleanAndParseJson(fallbackRaw);
         } catch (fallbackErr: any) {
           if (signal?.aborted) throw fallbackErr;
@@ -528,7 +530,7 @@ ${this.buildBibleContext(bible, glossary)}
       }
 
       if (editorModel && editorModel.trim()) {
-        parsed = await this.proofreadOutlineAndSettings(baseUrl, editorModel, parsed, onProgress, signal);
+        parsed = await this.proofreadOutlineAndSettings(baseUrl, editorModel, parsed, onProgress, signal, aiSettings);
       }
 
       let rawChapters: any[] = Array.isArray(parsed.chapters) ? parsed.chapters : [];
@@ -855,7 +857,8 @@ ${chapterSummaries}
     sceneIndex: number,
     previousContextSummary: string,
     onChunk: (text: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    aiSettings?: any
   ): Promise<string> {
     const scene = chapter.scenes[sceneIndex];
     const totalScenes = chapter.scenes.length;
@@ -907,7 +910,9 @@ ${this.buildBibleContext(bible, glossary)}
       userPrompt,
       onChunk,
       0.75,
-      signal
+      signal,
+      false,
+      aiSettings
     );
     return NovelEngine.sanitizeManuscript(raw, endingIndicator);
   }
@@ -1049,7 +1054,8 @@ ${originalDraft}
     glossary: Glossary,
     chapterTitle: string,
     previousContextSummary: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    aiSettings?: any
   ): Promise<{ comments: ReviewComment[]; hasCriticalError: boolean }> {
     const systemPrompt = `あなたは文芸誌のベテラン編集者（校閲エディター）です。
 出来上がった原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
@@ -1089,7 +1095,7 @@ ${draftContent.slice(0, 3000)}
 上記原稿を簡単に校閲し、JSON形式で指摘事項を出力してください。問題がなければ "comments": [] で返してください。`;
 
     try {
-      const rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.2, signal, true);
+      const rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.2, signal, true, aiSettings);
       const parsed = this.cleanAndParseJson(rawResponse);
 
       const comments: ReviewComment[] = (parsed.comments || []).map((c: any, index: number) => ({

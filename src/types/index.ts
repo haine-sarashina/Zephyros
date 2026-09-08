@@ -74,6 +74,8 @@ export interface AISettings {
   editorModel: string; // 編集者モデル (例: gemma2:27b, gemma4:31b)
   temperature: number; // 0.7
   topP: number;
+  thinkMode?: 'nothink' | 'think' | 'none'; // 思考プロンプト制御 ('nothink', 'think', 'none')
+  keepAlive?: string; // ローカルAI常駐設定 ('-1', '5m', '10m', '30m', '60m', '0')
 }
 
 export interface ReviewComment {

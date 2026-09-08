@@ -87,15 +87,27 @@ export class OllamaService {
     userPrompt: string,
     temperature: number = 0.7,
     signal?: AbortSignal,
-    formatJson: boolean = false
+    formatJson: boolean = false,
+    aiOptions?: { thinkMode?: 'nothink' | 'think' | 'none'; keepAlive?: string }
   ): Promise<string> {
+    const thinkMode = aiOptions?.thinkMode ?? 'nothink';
+    const keepAlive = aiOptions?.keepAlive ?? '-1';
+
+    let finalSystem = systemPrompt || '';
+    if (thinkMode === 'nothink' && !finalSystem.startsWith('/nothink')) {
+      finalSystem = `/nothink\n${finalSystem}`;
+    } else if (thinkMode === 'think' && !finalSystem.startsWith('/think')) {
+      finalSystem = `/think\n${finalSystem}`;
+    }
+
     const bodyObj = {
       model,
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: finalSystem },
         { role: 'user', content: userPrompt }
       ],
       stream: false,
+      keep_alive: keepAlive,
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
@@ -146,15 +158,27 @@ export class OllamaService {
     onChunk: (chunk: string) => void,
     temperature: number = 0.7,
     signal?: AbortSignal,
-    formatJson: boolean = false
+    formatJson: boolean = false,
+    aiOptions?: { thinkMode?: 'nothink' | 'think' | 'none'; keepAlive?: string }
   ): Promise<string> {
+    const thinkMode = aiOptions?.thinkMode ?? 'nothink';
+    const keepAlive = aiOptions?.keepAlive ?? '-1';
+
+    let finalSystem = systemPrompt || '';
+    if (thinkMode === 'nothink' && !finalSystem.startsWith('/nothink')) {
+      finalSystem = `/nothink\n${finalSystem}`;
+    } else if (thinkMode === 'think' && !finalSystem.startsWith('/think')) {
+      finalSystem = `/think\n${finalSystem}`;
+    }
+
     const bodyObj = {
       model,
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: finalSystem },
         { role: 'user', content: userPrompt }
       ],
       stream: true,
+      keep_alive: keepAlive,
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,

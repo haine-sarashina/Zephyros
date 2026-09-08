@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AISettings } from '../types';
 import { OllamaService, OllamaModelInfo } from '../services/ollamaService';
-import { Settings, RefreshCw, CheckCircle2, XCircle, Bot, ShieldCheck, Save, Check } from 'lucide-react';
+import { Settings, RefreshCw, CheckCircle2, XCircle, Bot, ShieldCheck, Save, Check, Sparkles } from 'lucide-react';
 
 interface AISettingsViewProps {
   settings: AISettings;
@@ -201,6 +201,62 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
               )}
               <p className="text-[11px] text-slate-500 mt-1">推奨モデル: Gemma 4:31B / Gemma 2 27B 等</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. 思考プロンプト制御 ＆ ローカルAI常駐設定 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-300 flex items-center space-x-2">
+          <Sparkles className="w-4 h-4 text-indigo-400" />
+          <span>思考制御コマンド ＆ 常駐VRAM保持設定</span>
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          {/* 思考プロンプト制御 (/nothink, /think) */}
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-slate-400">
+              思考制御コマンド (`/nothink` / `/think`)
+            </label>
+            <select
+              value={formState.thinkMode || 'nothink'}
+              onChange={(e) =>
+                setFormState({
+                  ...formState,
+                  thinkMode: e.target.value as 'nothink' | 'think' | 'none',
+                })
+              }
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="nothink">`/nothink` を付与 (推奨: 余計な思考出力を抑制)</option>
+              <option value="think">`/think` を付与 (思考プロセス出力を許可)</option>
+              <option value="none">なし (指定しない)</option>
+            </select>
+            <p className="text-[11px] text-slate-500">
+              お題ガチャ、プロット作成、本文執筆、校閲などのAI起動時にプロンプト冒頭へコマンドを自動付与します。
+            </p>
+          </div>
+
+          {/* ローカルAI常駐設定 (keep_alive) */}
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-slate-400">
+              ローカルAI常駐設定 (`keep_alive`)
+            </label>
+            <select
+              value={formState.keepAlive || '-1'}
+              onChange={(e) => setFormState({ ...formState, keepAlive: e.target.value })}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="-1">常駐 (VRAMに保持し続ける / ロード時間なし・推奨)</option>
+              <option value="5m">5分間保持 (5m)</option>
+              <option value="10m">10分間保持 (10m)</option>
+              <option value="30m">30分間保持 (30m)</option>
+              <option value="60m">60分間保持 (60m)</option>
+              <option value="0">即座にアンロード (0 / VRAM即時解放)</option>
+            </select>
+            <p className="text-[11px] text-slate-500">
+              OllamaがGPUメモリ(VRAM)上にモデルを保持する時間を指定します。常駐にすると毎回の起動待ちを排除できます。
+            </p>
           </div>
         </div>
       </div>

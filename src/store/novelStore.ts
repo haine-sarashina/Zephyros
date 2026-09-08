@@ -108,6 +108,8 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   editorModel: 'gemma2:27b',
   temperature: 0.7,
   topP: 0.9,
+  thinkMode: 'nothink',
+  keepAlive: '-1',
 };
 
 // 初期デフォルトプロジェクトの作成

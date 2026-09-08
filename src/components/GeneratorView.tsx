@@ -211,7 +211,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
             bible,
             glossary,
             (msg) => setCurrentStatus(msg),
-            controller.signal
+            controller.signal,
+            aiSettings
           );
         } catch (err: any) {
           if (err.name === 'AbortError' || controller.signal.aborted) {
@@ -408,7 +409,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                     return updated;
                   });
                 },
-                globalSession.abortController.signal
+                globalSession.abortController.signal,
+                aiSettings
               );
 
               if (!draftedContent || draftedContent.trim().length < 200) {
@@ -445,7 +447,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                   latestGlossary,
                   chapter.title,
                   prevSummary,
-                  globalSession.abortController.signal
+                  globalSession.abortController.signal,
+                  aiSettings
                 );
 
                 lastReviewComments = review.comments;

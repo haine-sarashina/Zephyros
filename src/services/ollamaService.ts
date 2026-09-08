@@ -78,6 +78,16 @@ export class OllamaService {
   }
 
   /**
+   * Ollama API が要求する keep_alive パラメータの正規化
+   * '-1' や undefined は数値 -1 (無限常駐) へ変換し、'0' は 0、それ以外 ('5m' 等) は文字列のまま渡す
+   */
+  private static parseKeepAlive(val?: string): string | number {
+    if (val === undefined || val === null || val === '-1') return -1;
+    if (val === '0') return 0;
+    return val;
+  }
+
+  /**
    * 単発テキスト生成 (/api/chat) (Rust プロキシ優先)
    */
   static async chat(
@@ -91,7 +101,7 @@ export class OllamaService {
     aiOptions?: { thinkMode?: 'nothink' | 'think' | 'none'; keepAlive?: string }
   ): Promise<string> {
     const thinkMode = aiOptions?.thinkMode ?? 'nothink';
-    const keepAlive = aiOptions?.keepAlive ?? '-1';
+    const keepAliveParam = this.parseKeepAlive(aiOptions?.keepAlive);
 
     let finalSystem = systemPrompt || '';
     if (thinkMode === 'nothink' && !finalSystem.startsWith('/nothink')) {
@@ -107,7 +117,7 @@ export class OllamaService {
         { role: 'user', content: userPrompt }
       ],
       stream: false,
-      keep_alive: keepAlive,
+      keep_alive: keepAliveParam,
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
@@ -162,7 +172,7 @@ export class OllamaService {
     aiOptions?: { thinkMode?: 'nothink' | 'think' | 'none'; keepAlive?: string }
   ): Promise<string> {
     const thinkMode = aiOptions?.thinkMode ?? 'nothink';
-    const keepAlive = aiOptions?.keepAlive ?? '-1';
+    const keepAliveParam = this.parseKeepAlive(aiOptions?.keepAlive);
 
     let finalSystem = systemPrompt || '';
     if (thinkMode === 'nothink' && !finalSystem.startsWith('/nothink')) {
@@ -178,7 +188,7 @@ export class OllamaService {
         { role: 'user', content: userPrompt }
       ],
       stream: true,
-      keep_alive: keepAlive,
+      keep_alive: keepAliveParam,
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,

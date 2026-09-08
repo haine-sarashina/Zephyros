@@ -38,7 +38,7 @@ export class NovelEngine {
   }
 
   /**
-   * 途切れた未完成のJSON文字列を、直前の完結した要素まで巻戻してパース可能な状態に完全復元する
+   * 途切れた未完成のJSON文字列を、LIFOスタックにより直前の完結要素まで巻戻して完全修復・パースする
    */
   private static repairPartialJson(jsonStr: string): string {
     let str = jsonStr.trim();
@@ -49,45 +49,74 @@ export class NovelEngine {
       return str;
     } catch (_) {}
 
-    for (let len = str.length; len > 10; len -= 5) {
-      let candidate = str.slice(0, len).trim();
+    // 全体に対して二重引用符の修正を事前適用
+    const fixedStr = this.fixUnescapedQuotes(str);
+    try {
+      JSON.parse(fixedStr);
+      return fixedStr;
+    } catch (_) {}
 
-      candidate = candidate
-        .replace(/,[\s]*$/, '')
-        .replace(/:[\s]*$/, '')
+    const tryClose = (candidate: string): string | null => {
+      let s = candidate
+        .replace(/,\s*$/, '')
+        .replace(/:\s*$/, '')
         .replace(/,\s*([\}\]])/g, '$1');
 
-      let candInString = false;
-      let candEscaped = false;
-      for (let i = 0; i < candidate.length; i++) {
-        const c = candidate[i];
-        if (c === '"' && !candEscaped) {
-          candInString = !candInString;
-        } else if (c === '\\' && !candEscaped) {
-          candEscaped = true;
-        } else {
-          candEscaped = false;
+      let inString = false;
+      let escaped = false;
+      const stack: string[] = [];
+
+      for (let i = 0; i < s.length; i++) {
+        const char = s[i];
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (char === '{') stack.push('}');
+          else if (char === '[') stack.push(']');
+          else if (char === '}' || char === ']') {
+            if (stack.length > 0 && stack[stack.length - 1] === char) {
+              stack.pop();
+            }
+          }
         }
       }
-      if (candInString) {
-        candidate += '"';
+
+      if (inString) {
+        if (s.endsWith('\\')) s = s.slice(0, -1);
+        s += '"';
       }
 
-      const openBraces = (candidate.match(/\{/g) || []).length;
-      const closeBraces = (candidate.match(/\}/g) || []).length;
-      const openBrackets = (candidate.match(/\[/g) || []).length;
-      const closeBrackets = (candidate.match(/\]/g) || []).length;
+      s = s.replace(/,\s*$/, '').replace(/:\s*$/, '');
 
-      if (openBraces >= closeBraces && openBrackets >= closeBrackets) {
-        let testStr = candidate;
-        for (let i = 0; i < openBrackets - closeBrackets; i++) testStr += ']';
-        for (let i = 0; i < openBraces - closeBraces; i++) testStr += '}';
-
-        try {
-          JSON.parse(testStr);
-          return testStr;
-        } catch (_) {}
+      for (let i = stack.length - 1; i >= 0; i--) {
+        s += stack[i];
       }
+
+      s = s.replace(/,\s*([\}\]])/g, '$1');
+
+      try {
+        JSON.parse(s);
+        return s;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    // 末尾から文字単位で巻き戻しテスト
+    for (let len = fixedStr.length; len > 0; len--) {
+      const candidate = fixedStr.slice(0, len).trim();
+      const result = tryClose(candidate);
+      if (result) return result;
     }
 
     return str;
@@ -115,7 +144,7 @@ export class NovelEngine {
           inString = true;
           result.push(char);
         } else {
-          const rest = jsonStr.slice(i + 1).trim();
+          const rest = jsonStr.slice(i + 1).trimStart();
           if (/^(?:,|:|\}|\]|\n|\r|$)/.test(rest)) {
             inString = false;
             result.push(char);
@@ -175,32 +204,32 @@ export class NovelEngine {
     // 試行1: 通常パース
     try {
       return JSON.parse(cleaned);
-    } catch (e1) {
-      // 試行2: 日本語文字列内の内部引用符修正 ＋ 末尾カンマ・コメント・制御文字除去
-      let repaired = this.fixUnescapedQuotes(cleaned)
-        .replace(/,\s*([\}\]])/g, '$1')
-        .replace(/\/\/.*/g, '')
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    } catch (_) {}
 
-      try {
-        return JSON.parse(repaired);
-      } catch (e2) {
-        // 試行3: 途切れたJSONのスマート巻戻し・自動復元 (repairPartialJson)
-        try {
-          const partialFixed = this.repairPartialJson(repaired);
-          return JSON.parse(partialFixed);
-        } catch (e3) {
-          // 試行4: 原本に対する部分修復
-          try {
-            const rawPartial = this.repairPartialJson(cleaned);
-            return JSON.parse(rawPartial);
-          } catch (e4) {
-            console.error('All JSON parse attempts failed:', { text: text.slice(0, 500), cleaned: cleaned.slice(0, 500) });
-            throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました。応答長: ${text.length}字`);
-          }
-        }
-      }
-    }
+    // 試行2: 内部引用符修正 ＋ 通常パース
+    const quoteFixed = this.fixUnescapedQuotes(cleaned);
+    try {
+      return JSON.parse(quoteFixed);
+    } catch (_) {}
+
+    // 試行3: スタックベースの途切れJSON復元 (repairPartialJson)
+    try {
+      const repaired = this.repairPartialJson(cleaned);
+      return JSON.parse(repaired);
+    } catch (_) {}
+
+    // 試行4: 末尾カンマ・コメント・制御文字除去 ＋ スタック復元
+    const sanitized = quoteFixed
+      .replace(/,\s*([\}\]])/g, '$1')
+      .replace(/\/\/.*/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    try {
+      const finalRepaired = this.repairPartialJson(sanitized);
+      return JSON.parse(finalRepaired);
+    } catch (_) {}
+
+    console.error('All JSON parse attempts failed:', { text: text.slice(0, 500), cleaned: cleaned.slice(0, 500) });
+    throw new Error(`JSONパースエラー: LLM応答の解析に失敗しました。応答長: ${text.length}字`);
   }
 
   /**

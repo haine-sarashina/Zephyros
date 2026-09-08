@@ -59,18 +59,24 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
   const [activeSceneIndex, setActiveSceneIndexState] = useState<number>(globalSession.activeSceneIndex);
   const [streamingText, setStreamingTextState] = useState<string>(globalSession.streamingText);
 
-  const initialLogs = (editorLogs && editorLogs.length > 0) ? editorLogs : globalSession.editorLog;
+  const initialLogs = editorLogs || [];
   const [editorLog, setEditorLogState] = useState<string[]>(initialLogs);
 
   const streamingEndRef = useRef<HTMLDivElement>(null);
 
-  // 親からの editorLogs 変更時の同期
+  // 親からの editorLogs または novelData 変更時の同期（別作品・新規作品への切り替え時にログの混入を防止）
   useEffect(() => {
-    if (editorLogs && editorLogs.length > 0) {
-      setEditorLogState(editorLogs);
-      globalSession.editorLog = editorLogs;
+    const currentLogs = editorLogs || [];
+    setEditorLogState(currentLogs);
+    globalSession.editorLog = currentLogs;
+
+    if (!globalSession.isGenerating) {
+      globalSession.streamingText = '';
+      globalSession.currentStatus = '待機中';
+      setStreamingTextState('');
+      setCurrentStatusState('待機中');
     }
-  }, [editorLogs]);
+  }, [editorLogs, novelData?.title]);
 
   // ステート変更をグローバルセッションおよび親へ同期永続化
   const setIsGenerating = (val: boolean) => {

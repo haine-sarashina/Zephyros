@@ -560,16 +560,13 @@ ${this.buildBibleContext(bible, glossary)}
         status: 'pending'
       }));
 
-      // 初期設定資料および特殊用語の新規構築 (プロット再生成時は新プロットの設定集として一新)
-      const initialBible: SettingBible = {
-        characters: [],
-        worldBuilding: [],
-        geography: [],
-      };
-      const initialGlossary: Glossary = {
-        terms: [],
-        rubies: [],
-      };
+      // 初期設定資料および特殊用語の統合 (ユーザーが事前追加・変更した設定資料集・用語辞典を維持)
+      const initialBible: SettingBible = JSON.parse(
+        JSON.stringify(bible || { characters: [], worldBuilding: [], geography: [] })
+      );
+      const initialGlossary: Glossary = JSON.parse(
+        JSON.stringify(glossary || { terms: [], rubies: [] })
+      );
 
       const rawChars = parsed.characters || parsed.newCharacters || parsed.characterList || [];
       if (Array.isArray(rawChars)) {

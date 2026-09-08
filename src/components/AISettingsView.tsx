@@ -132,6 +132,74 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
         </div>
       </div>
 
+      {/* 1. アプリケーションバージョン ＆ 手動アップデート確認 (最上部配置) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center space-x-2">
+            <ArrowUpCircle className="w-5 h-5 text-indigo-400" />
+            <div>
+              <h3 className="text-sm font-bold text-slate-100">Zephyros アプリケーション更新</h3>
+              <p className="text-[11px] text-slate-400">
+                現在のバージョン: <span className="font-mono font-semibold text-slate-200">{currentVersion ? `v${currentVersion}` : '確認中...'}</span>
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleCheckUpdate}
+            disabled={checkingUpdate || isUpdating}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-xl flex items-center space-x-2 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${checkingUpdate ? 'animate-spin' : ''}`} />
+            <span>最新バージョンの確認</span>
+          </button>
+        </div>
+
+        {/* アップデート確認結果 */}
+        <div>
+          {updateStatus.type === 'up-to-date' && (
+            <div className="flex items-center space-x-2 text-emerald-400 text-xs font-medium bg-emerald-950/50 border border-emerald-800 p-3 rounded-xl">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>お使いの Zephyros (v{currentVersion}) は最新バージョンです。</span>
+            </div>
+          )}
+
+          {updateStatus.type === 'available' && (
+            <div className="flex items-center justify-between text-indigo-300 text-xs font-medium bg-indigo-950/50 border border-indigo-800 p-4 rounded-xl">
+              <div className="flex items-center space-x-2">
+                <ArrowUpCircle className="w-5 h-5 text-indigo-400 shrink-0" />
+                <div>
+                  <p className="font-semibold text-slate-100">
+                    新しいバージョン (v{updateStatus.version}) が利用可能です！
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    アップデートをダウンロード・インストールしてアプリケーションを再起動します。
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleApplyUpdate}
+                disabled={isUpdating}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center space-x-2 transition-colors shrink-0 cursor-pointer"
+              >
+                <Download className={`w-4 h-4 ${isUpdating ? 'animate-bounce' : ''}`} />
+                <span>{isUpdating ? '更新適用中...' : 'アップデートして再起動'}</span>
+              </button>
+            </div>
+          )}
+
+          {updateStatus.type === 'error' && (
+            <div className="flex items-center space-x-2 text-amber-400 text-xs font-medium bg-amber-950/50 border border-amber-800 p-3 rounded-xl">
+              <XCircle className="w-4 h-4 shrink-0" />
+              <span>
+                アップデート確認スキップ (開発モードまたはオフラインの可能性があります): {updateStatus.message}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* 1. Ollama URL 接続設定 */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
         <h3 className="text-sm font-semibold text-slate-300">Ollama API サーバー設定</h3>
@@ -414,74 +482,6 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
           <p className="text-[11px] text-slate-500">
             OllamaがGPUメモリ(VRAM)上にモデルを保持する時間を指定します。常駐に設定すると毎回のモデルロード待ちを排除できます。
           </p>
-        </div>
-      </div>
-
-      {/* 4. アプリケーションバージョン ＆ 手動アップデート確認 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center space-x-2">
-            <ArrowUpCircle className="w-5 h-5 text-indigo-400" />
-            <div>
-              <h3 className="text-sm font-bold text-slate-100">Zephyros アプリケーション更新</h3>
-              <p className="text-[11px] text-slate-400">
-                現在のバージョン: <span className="font-mono font-semibold text-slate-200">{currentVersion ? `v${currentVersion}` : '確認中...'}</span>
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleCheckUpdate}
-            disabled={checkingUpdate || isUpdating}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-xl flex items-center space-x-2 transition-colors cursor-pointer"
-          >
-            <RefreshCw className={`w-4 h-4 ${checkingUpdate ? 'animate-spin' : ''}`} />
-            <span>最新バージョンの確認</span>
-          </button>
-        </div>
-
-        {/* アップデート確認結果 */}
-        <div>
-          {updateStatus.type === 'up-to-date' && (
-            <div className="flex items-center space-x-2 text-emerald-400 text-xs font-medium bg-emerald-950/50 border border-emerald-800 p-3 rounded-xl">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>お使いの Zephyros (v{currentVersion}) は最新バージョンです。</span>
-            </div>
-          )}
-
-          {updateStatus.type === 'available' && (
-            <div className="flex items-center justify-between text-indigo-300 text-xs font-medium bg-indigo-950/50 border border-indigo-800 p-4 rounded-xl">
-              <div className="flex items-center space-x-2">
-                <ArrowUpCircle className="w-5 h-5 text-indigo-400 shrink-0" />
-                <div>
-                  <p className="font-semibold text-slate-100">
-                    新しいバージョン (v{updateStatus.version}) が利用可能です！
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    アップデートをダウンロード・インストールしてアプリケーションを再起動します。
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={handleApplyUpdate}
-                disabled={isUpdating}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center space-x-2 transition-colors shrink-0 cursor-pointer"
-              >
-                <Download className={`w-4 h-4 ${isUpdating ? 'animate-bounce' : ''}`} />
-                <span>{isUpdating ? '更新適用中...' : 'アップデートして再起動'}</span>
-              </button>
-            </div>
-          )}
-
-          {updateStatus.type === 'error' && (
-            <div className="flex items-center space-x-2 text-amber-400 text-xs font-medium bg-amber-950/50 border border-amber-800 p-3 rounded-xl">
-              <XCircle className="w-4 h-4 shrink-0" />
-              <span>
-                アップデート確認スキップ (開発モードまたはオフラインの可能性があります): {updateStatus.message}
-              </span>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -84,22 +84,42 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
 実行するたびに異なる切り口やジャンル感（コメディ、バトルファンタジー、スローライフ、ミステリー、日常系など）、展開のアイデアにしてください。`;
 
     try {
-      const rawResponse = await OllamaService.chat(baseUrl, model, systemPrompt, userPrompt, 0.85);
-      const jsonStr = extractJson(rawResponse);
-      const parsed = JSON.parse(jsonStr);
+      const useThink = aiSettings?.thinkCommandTargets?.gacha !== false;
+      const aiOptions = {
+        thinkMode: useThink ? ('nothink' as const) : ('none' as const),
+        keepAlive: aiSettings?.keepAlive || '-1',
+      };
 
-      if (parsed.storyConcept && parsed.detailedPrompt) {
+      const rawResponse = await OllamaService.chat(baseUrl, model, systemPrompt, userPrompt, 0.85, undefined, false, aiOptions);
+      const jsonStr = extractJson(rawResponse);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        // AIがJSON形式で返さなかった場合のテキスト抽出フォールバック
+        parsed = {
+          storyConcept: rawResponse.slice(0, 60).replace(/[\r\n]+/g, ' '),
+          detailedPrompt: rawResponse,
+        };
+      }
+
+      if (parsed.storyConcept || parsed.detailedPrompt) {
         updateStateAndSave((prev) => ({
           ...prev,
-          storyConcept: parsed.storyConcept,
-          detailedPrompt: parsed.detailedPrompt,
+          storyConcept: parsed.storyConcept || `${themes.join('×')}の物語`,
+          detailedPrompt: parsed.detailedPrompt || rawResponse,
         }));
       } else {
-        throw new Error('AIからの応答フォーマットが不正です。');
+        throw new Error('AIからの応答フォーマットを抽出できませんでした。');
       }
     } catch (err: any) {
       console.error('Gacha AI generation error:', err);
-      setGachaError('AIコンセプトの生成に失敗しました。Ollamaが起動しているか、モデル設定を確認してください。');
+      const msg = err?.message || String(err);
+      if (msg.includes('not found') || msg.includes('404')) {
+        setGachaError(`指定されたモデル '${model}' がOllamaにインストールされていません。設定画面でローカルに存在するモデルを選択するか、ターミナルで 'ollama pull ${model}' を実行してください。`);
+      } else {
+        setGachaError(`AIコンセプトの生成に失敗しました (${msg})。設定画面でモデル名や接続状態を確認してください。`);
+      }
     } finally {
       setIsGeneratingGacha(false);
     }

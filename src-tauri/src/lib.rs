@@ -164,6 +164,10 @@ fn ollama_chat_raw(url: String, body: String) -> Result<String, String> {
                     return Ok(res_str);
                 }
             }
+            Err(ureq::Error::Status(code, resp)) => {
+                let err_body = resp.into_string().unwrap_or_default();
+                last_err = format!("HTTP {}: {}", code, err_body);
+            }
             Err(e) => {
                 last_err = e.to_string();
             }
@@ -204,6 +208,10 @@ fn ollama_chat_stream_raw(
             Ok(r) => {
                 response = Some(r);
                 break;
+            }
+            Err(ureq::Error::Status(code, resp)) => {
+                let err_body = resp.into_string().unwrap_or_default();
+                last_err = format!("HTTP {}: {}", code, err_body);
             }
             Err(e) => {
                 last_err = e.to_string();

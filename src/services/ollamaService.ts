@@ -124,12 +124,12 @@ export class OllamaService {
         });
         const parsed = JSON.parse(rawRes);
         return parsed.message?.content || '';
-      } catch (e) {
-        console.warn('Tauri invoke ollama_chat_raw failed, falling back to fetch:', e);
+      } catch (e: any) {
+        throw new Error(typeof e === 'string' ? e : e?.message || JSON.stringify(e));
       }
     }
 
-    // ブラウザフェッチフォールバック
+    // ブラウザフェッチフォールバック（Webブラウザ実行時のみ）
     const cleanUrl = baseUrl.replace(/\/+$/, '');
     const response = await fetch(`${cleanUrl}/api/chat`, {
       method: 'POST',
@@ -204,8 +204,8 @@ export class OllamaService {
         });
 
         return fullText;
-      } catch (e) {
-        console.warn('Tauri invoke ollama_chat_stream_raw failed, falling back to fetch:', e);
+      } catch (e: any) {
+        throw new Error(typeof e === 'string' ? e : e?.message || JSON.stringify(e));
       } finally {
         if (unlisten) unlisten();
       }

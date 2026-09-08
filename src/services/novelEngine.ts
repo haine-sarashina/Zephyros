@@ -388,11 +388,11 @@ ${JSON.stringify(draftData, null, 2)}
         synopsis: parsed.synopsis || draftData.synopsis,
         outline: parsed.outline || draftData.outline,
         chapters: Array.isArray(parsed.chapters) && parsed.chapters.length > 0 ? parsed.chapters : draftData.chapters,
-        characters: Array.isArray(parsed.characters) ? parsed.characters : draftData.characters,
-        worldBuilding: Array.isArray(parsed.worldBuilding) ? parsed.worldBuilding : draftData.worldBuilding,
-        geography: Array.isArray(parsed.geography) ? parsed.geography : draftData.geography,
-        terms: Array.isArray(parsed.terms) ? parsed.terms : draftData.terms,
-        rubies: Array.isArray(parsed.rubies) ? parsed.rubies : draftData.rubies,
+        characters: Array.isArray(parsed.characters) && parsed.characters.length > 0 ? parsed.characters : draftData.characters,
+        worldBuilding: Array.isArray(parsed.worldBuilding) && parsed.worldBuilding.length > 0 ? parsed.worldBuilding : draftData.worldBuilding,
+        geography: Array.isArray(parsed.geography) && parsed.geography.length > 0 ? parsed.geography : draftData.geography,
+        terms: Array.isArray(parsed.terms) && parsed.terms.length > 0 ? parsed.terms : draftData.terms,
+        rubies: Array.isArray(parsed.rubies) && parsed.rubies.length > 0 ? parsed.rubies : draftData.rubies,
       };
     } catch (e) {
       console.warn('Editor AI proofread outlined data failed, proceeding with draft data:', e);
@@ -560,13 +560,16 @@ ${this.buildBibleContext(bible, glossary)}
         status: 'pending'
       }));
 
-      // 初期設定資料および特殊用語の統合 (ユーザーが事前追加・変更した設定資料集・用語辞典を維持)
-      const initialBible: SettingBible = JSON.parse(
-        JSON.stringify(bible || { characters: [], worldBuilding: [], geography: [] })
-      );
-      const initialGlossary: Glossary = JSON.parse(
-        JSON.stringify(glossary || { terms: [], rubies: [] })
-      );
+      // 初期設定資料および特殊用語の新規構築 (新プロットの策定内容に合わせて一新)
+      const initialBible: SettingBible = {
+        characters: [],
+        worldBuilding: [],
+        geography: [],
+      };
+      const initialGlossary: Glossary = {
+        terms: [],
+        rubies: [],
+      };
 
       const rawChars = parsed.characters || parsed.newCharacters || parsed.characterList || [];
       if (Array.isArray(rawChars)) {

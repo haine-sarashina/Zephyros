@@ -560,9 +560,16 @@ ${this.buildBibleContext(bible, glossary)}
         status: 'pending'
       }));
 
-      // 初期設定資料および特殊用語の統合
-      const initialBible: SettingBible = JSON.parse(JSON.stringify(bible));
-      const initialGlossary: Glossary = JSON.parse(JSON.stringify(glossary));
+      // 初期設定資料および特殊用語の新規構築 (プロット再生成時は新プロットの設定集として一新)
+      const initialBible: SettingBible = {
+        characters: [],
+        worldBuilding: [],
+        geography: [],
+      };
+      const initialGlossary: Glossary = {
+        terms: [],
+        rubies: [],
+      };
 
       const rawChars = parsed.characters || parsed.newCharacters || parsed.characterList || [];
       if (Array.isArray(rawChars)) {

@@ -376,12 +376,75 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
         </div>
       </div>
 
-      {/* 3. トーン ＆ 構成指定 (12話 10万字) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+      {/* 3. 作品属性 & 文字数構成 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
         <h3 className="text-sm font-semibold text-slate-300 flex items-center space-x-2">
           <span className="bg-indigo-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">3</span>
-          <span>作品属性 ＆ 文字数構成</span>
+          <span>作品属性 ＆ 文字数・話数構成</span>
         </h3>
+
+        {/* 構成プリセット選択 */}
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-slate-400">構成プリセット選択</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              type="button"
+              disabled={isWritingStarted}
+              onClick={() => updateStateAndSave((prev) => ({ ...prev, targetChapterCount: 1, targetWordCount: 8000 }))}
+              className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center justify-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                formState.targetChapterCount === 1 && formState.targetWordCount === 8000
+                  ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200 ring-1 ring-indigo-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <span className="text-sm font-bold text-slate-100">短編</span>
+              <span className="text-[11px] opacity-80">1話 / 8,000文字</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isWritingStarted}
+              onClick={() => updateStateAndSave((prev) => ({ ...prev, targetChapterCount: 4, targetWordCount: 30000 }))}
+              className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center justify-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                formState.targetChapterCount === 4 && formState.targetWordCount === 30000
+                  ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200 ring-1 ring-indigo-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <span className="text-sm font-bold text-slate-100">中編</span>
+              <span className="text-[11px] opacity-80">4話 / 3万文字</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isWritingStarted}
+              onClick={() => updateStateAndSave((prev) => ({ ...prev, targetChapterCount: 12, targetWordCount: 100000 }))}
+              className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center justify-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                formState.targetChapterCount === 12 && formState.targetWordCount === 100000
+                  ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200 ring-1 ring-indigo-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <span className="text-sm font-bold text-slate-100">長編</span>
+              <span className="text-[11px] opacity-80">12話 / 10万文字</span>
+            </button>
+
+            <div
+              className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center justify-center space-y-0.5 transition-all ${
+                !(
+                  (formState.targetChapterCount === 1 && formState.targetWordCount === 8000) ||
+                  (formState.targetChapterCount === 4 && formState.targetWordCount === 30000) ||
+                  (formState.targetChapterCount === 12 && formState.targetWordCount === 100000)
+                )
+                  ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200 ring-1 ring-indigo-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-400'
+              }`}
+            >
+              <span className="text-sm font-bold text-slate-100">自由入力</span>
+              <span className="text-[11px] opacity-80">カスタム数値を設定</span>
+            </div>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -411,9 +474,10 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
             <div className="flex items-center space-x-2">
               <input
                 type="number"
+                min={1}
                 disabled={isWritingStarted}
                 value={formState.targetChapterCount}
-                onChange={(e) => updateStateAndSave((prev) => ({ ...prev, targetChapterCount: parseInt(e.target.value) || 12 }))}
+                onChange={(e) => updateStateAndSave((prev) => ({ ...prev, targetChapterCount: Math.max(1, parseInt(e.target.value) || 1) }))}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-slate-100 focus:outline-none focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/50"
               />
               <span className="text-xs text-slate-400 whitespace-nowrap">話</span>
@@ -421,14 +485,15 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">目標全文字数（文庫本1冊分）</label>
+            <label className="block text-xs font-medium text-slate-400 mb-1">目標全文字数</label>
             <div className="flex items-center space-x-2">
               <input
                 type="number"
                 step="1000"
+                min={500}
                 disabled={isWritingStarted}
                 value={formState.targetWordCount}
-                onChange={(e) => updateStateAndSave((prev) => ({ ...prev, targetWordCount: parseInt(e.target.value) || 100000 }))}
+                onChange={(e) => updateStateAndSave((prev) => ({ ...prev, targetWordCount: Math.max(500, parseInt(e.target.value) || 1000) }))}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-slate-100 focus:outline-none focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/50"
               />
               <span className="text-xs text-slate-400 whitespace-nowrap">文字</span>

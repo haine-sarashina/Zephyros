@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PromptSettings, AISettings } from '../types';
 import { OllamaService } from '../services/ollamaService';
-import { Sparkles, Plus, X, Save, Check, Lock, Dices, Loader2, AlertCircle } from 'lucide-react';
+import { Sparkles, Plus, X, Save, Check, Lock, Dices, Loader2, AlertCircle, Edit2 } from 'lucide-react';
 
 interface PromptSetupViewProps {
   settings: PromptSettings;
@@ -23,6 +23,10 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
   const [savedNotice, setSavedNotice] = useState(false);
   const [isGeneratingGacha, setIsGeneratingGacha] = useState(false);
   const [gachaError, setGachaError] = useState<string | null>(null);
+
+  // タグ編集関連ステート
+  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
+  const [editingTagValue, setEditingTagValue] = useState<string>('');
 
   // 外部からの初期設定更新時のみ同期（再レンダリング無限ループを防止）
   useEffect(() => {
@@ -136,11 +140,40 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
     setNewTagInput('');
   };
 
-  const handleRemoveTag = (tag: string) => {
+  const handleStartEditTag = (index: number, currentText: string) => {
+    if (isWritingStarted) return;
+    setEditingTagIndex(index);
+    setEditingTagValue(currentText);
+  };
+
+  const handleSaveEditTag = (index: number) => {
+    const trimmed = editingTagValue.trim();
+    if (!trimmed) {
+      handleRemoveTagByIndex(index);
+    } else {
+      const isDuplicate = formState.themes.some((t, i) => i !== index && t === trimmed);
+      if (!isDuplicate) {
+        updateStateAndSave((prev) => {
+          const nextThemes = [...prev.themes];
+          nextThemes[index] = trimmed;
+          return { ...prev, themes: nextThemes };
+        });
+      }
+    }
+    setEditingTagIndex(null);
+    setEditingTagValue('');
+  };
+
+  const handleCancelEditTag = () => {
+    setEditingTagIndex(null);
+    setEditingTagValue('');
+  };
+
+  const handleRemoveTagByIndex = (index: number) => {
     if (isWritingStarted) return;
     updateStateAndSave((prev) => ({
       ...prev,
-      themes: prev.themes.filter((t) => t !== tag),
+      themes: prev.themes.filter((_, i) => i !== index),
     }));
   };
 
@@ -179,28 +212,79 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
 
       {/* 1. お題キーワード (タグ) 設定 */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 flex items-center space-x-2">
-          <span className="bg-indigo-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">1</span>
-          <span>お題キーワード (3〜4個設定)</span>
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-300 flex items-center space-x-2">
+            <span className="bg-indigo-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs">1</span>
+            <span>お題キーワード (3〜4個設定)</span>
+          </h3>
+          {!isWritingStarted && (
+            <p className="text-[11px] text-slate-400">
+              ※キーワードをクリックすると編集できます
+            </p>
+          )}
+        </div>
 
         <div className="flex flex-wrap gap-2 items-center">
-          {formState.themes.map((theme) => (
-            <span
-              key={theme}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/80 border border-indigo-700/60 text-indigo-200 text-sm font-medium shadow-sm"
-            >
-              <span>#{theme}</span>
-              {!isWritingStarted && (
-                <button
-                  onClick={() => handleRemoveTag(theme)}
-                  className="hover:text-rose-400 text-indigo-400 transition-colors"
+          {formState.themes.map((theme, index) => {
+            if (editingTagIndex === index) {
+              return (
+                <div
+                  key={`edit-tag-${index}`}
+                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-950 border border-indigo-500 text-indigo-200 text-sm shadow-sm"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <span className="text-indigo-400 font-bold">#</span>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editingTagValue}
+                    onChange={(e) => setEditingTagValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveEditTag(index);
+                      if (e.key === 'Escape') handleCancelEditTag();
+                    }}
+                    onBlur={() => handleSaveEditTag(index)}
+                    className="bg-transparent border-none text-indigo-100 text-sm font-medium focus:outline-none min-w-[5rem]"
+                  />
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSaveEditTag(index)}
+                    className="text-emerald-400 hover:text-emerald-300 p-0.5"
+                    title="確定"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <span
+                key={`theme-tag-${index}`}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/80 border border-indigo-700/60 text-indigo-200 text-sm font-medium shadow-sm group hover:border-indigo-500 transition-colors"
+              >
+                <button
+                  disabled={isWritingStarted}
+                  onClick={() => handleStartEditTag(index, theme)}
+                  className={`flex items-center space-x-1 ${!isWritingStarted ? 'cursor-pointer hover:text-white' : ''}`}
+                  title={!isWritingStarted ? 'クリックして編集' : undefined}
+                >
+                  <span>#{theme}</span>
+                  {!isWritingStarted && (
+                    <Edit2 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+                  )}
                 </button>
-              )}
-            </span>
-          ))}
+                {!isWritingStarted && (
+                  <button
+                    onClick={() => handleRemoveTagByIndex(index)}
+                    className="hover:text-rose-400 text-indigo-400 transition-colors ml-1"
+                    title="削除"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </span>
+            );
+          })}
 
           {!isWritingStarted && formState.themes.length < 6 && (
             <div className="flex items-center space-x-2">

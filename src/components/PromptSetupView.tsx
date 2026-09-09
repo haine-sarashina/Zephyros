@@ -446,24 +446,76 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">作風 / トーン</label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* 作風 / トーン */}
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-slate-400">作風 / トーン</label>
+            {!isWritingStarted && (
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {[
+                  'ライトノベル・ファンタジー',
+                  'コメディ・ほのぼの日常',
+                  'ダークファンタジー・シリアス',
+                  'R18・ライトノベル・ファンタジー',
+                  'ラブコメ・青春',
+                ].map((preset) => (
+                  <button
+                    key={`tone-preset-${preset}`}
+                    type="button"
+                    onClick={() => updateStateAndSave((prev) => ({ ...prev, tone: preset }))}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                      formState.tone === preset
+                        ? 'bg-indigo-600/40 border border-indigo-500 text-indigo-200'
+                        : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               type="text"
               disabled={isWritingStarted}
               value={formState.tone}
+              placeholder="作風・トーンを自由入力 (例: シリアスな復讐劇)"
               onChange={(e) => updateStateAndSave((prev) => ({ ...prev, tone: e.target.value }))}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/50"
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">想定読者層</label>
+          {/* 想定読者層 */}
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-slate-400">想定読者層</label>
+            {!isWritingStarted && (
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {[
+                  '全年齢ファンタジー読者',
+                  'なろう系・WEB小説ファン',
+                  '成年男性向けファンタジー読者',
+                  '10代〜20代若者向け',
+                  '大人向け・深み重視',
+                ].map((preset) => (
+                  <button
+                    key={`audience-preset-${preset}`}
+                    type="button"
+                    onClick={() => updateStateAndSave((prev) => ({ ...prev, targetAudience: preset }))}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                      formState.targetAudience === preset
+                        ? 'bg-indigo-600/40 border border-indigo-500 text-indigo-200'
+                        : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               type="text"
               disabled={isWritingStarted}
               value={formState.targetAudience}
+              placeholder="想定読者層を自由入力 (例: SFファン)"
               onChange={(e) => updateStateAndSave((prev) => ({ ...prev, targetAudience: e.target.value }))}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-950/50"
             />

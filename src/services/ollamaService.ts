@@ -121,6 +121,10 @@ export class OllamaService {
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
+        top_p: 0.9,
+        top_k: 40,
+        repeat_penalty: 1.18,
+        repeat_last_n: 64,
         num_ctx: 32768,
         num_predict: 16384,
       }
@@ -192,6 +196,10 @@ export class OllamaService {
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
+        top_p: 0.9,
+        top_k: 40,
+        repeat_penalty: 1.18,
+        repeat_last_n: 64,
         num_ctx: 32768,
         num_predict: 16384,
       }

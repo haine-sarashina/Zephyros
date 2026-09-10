@@ -417,6 +417,21 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                 throw new Error(`執筆者AIからの本文生成結果が空、または短すぎます (${draftedContent?.length || 0}字)。`);
               }
 
+              // デジェネレーション（無限ループ・読点過多）のプログラム検知＆自動クレンジング
+              const degenCheck = NovelEngine.detectAndFixDegeneration(draftedContent);
+              if (degenCheck.hasDegeneration) {
+                setEditorLog((prev) => [
+                  ...prev,
+                  `[システム警告] 生成文章に異常 (${degenCheck.reasons.join(' / ')}) を検知したため自動除染クレンジングを実行しました。`,
+                ]);
+                draftedContent = degenCheck.cleanedText;
+              }
+
+              // 中間原稿キャッシュ保存
+              try {
+                localStorage.setItem(`zephyros_temp_draft_ch_${cIdx + 1}_sc_${sIdx + 1}`, draftedContent);
+              } catch {}
+
               // 編集者AI Gemma が校閲＆矛盾チェック
               const MAX_PROOFREAD_RETRIES = 2;
               let proofreadAttempt = 0;
@@ -513,6 +528,15 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                         },
                         globalSession.abortController.signal
                       );
+
+                      const rewriteDegen = NovelEngine.detectAndFixDegeneration(draftedContent);
+                      if (rewriteDegen.hasDegeneration) {
+                        setEditorLog((prev) => [
+                          ...prev,
+                          `[システム警告] リライト文章に異常を検知したため自動除染クレンジングを実行しました。`,
+                        ]);
+                        draftedContent = rewriteDegen.cleanedText;
+                      }
                     } else {
                       setEditorLog((prev) => [
                         ...prev,

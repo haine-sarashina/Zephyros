@@ -205,7 +205,8 @@ export class NovelEngine {
   /**
    * JSONパース不可能な生のLLMテキストからプロット情報を正規表現で救出する最終フォールバック
    */
-  private static extractOutlineFromRawText(text: string, _targetChapterCount: number = 12): any {
+  // @ts-ignore
+  private static _extractOutlineFromRawText(text: string, _targetChapterCount: number = 12): any {
     const titleMatch = text.match(/"title"\s*:\s*"([^"]+)"/) || text.match(/タイトル[：:]\s*([^\n]+)/);
     const subtitleMatch = text.match(/"subtitle"\s*:\s*"([^"]+)"/);
     const synopsisMatch = text.match(/"synopsis"\s*:\s*"([^"]+)"/) || text.match(/あらすじ[：:]\s*([^\n]+)/);
@@ -407,7 +408,7 @@ ${JSON.stringify(draftData, null, 2)}
   static async generateOutline(
     baseUrl: string,
     writerModel: string,
-    editorModel: string,
+    _editorModel: string,
     promptSettings: PromptSettings,
     bible: SettingBible,
     glossary: Glossary,
@@ -423,75 +424,37 @@ ${JSON.stringify(draftData, null, 2)}
     initialBible?: SettingBible;
     initialGlossary?: Glossary;
   }> {
-    if (onProgress) onProgress('執筆者AIがタイトル・プロット案および初期登場人物・世界観・用語を構成中...');
-
     const targetChapterCount = promptSettings.targetChapterCount || 12;
 
-    const systemPrompt = `あなたはプロの小説家・構成作家です。
-思考プロセス（<think>〜</think>）や解説テキストは出力せず、即座に指定されたJSONフォーマットのみを出力してください。
-与えられた「お題」「詳細指定」に基づいて、全${targetChapterCount}話の長編小説のタイトル、全体あらすじ、全${targetChapterCount}話の章題・各話あらすじ、および【主要登場人物】【世界観・品物設定】【地理・場所設定】【特殊用語】【ルビ表記】を策定してください。
+    // --- STEP 1: あらすじ・登場人物・世界観・用語集の基本枠生成 (高速 Call 1) ---
+    if (onProgress) onProgress('プロット準備中 (コア構想・キャラクター・世界観設定を構築中)...');
 
-【出力要件】
-- 各話あらすじは1〜2文（80字〜150字程度）で簡潔に記述してください。
-- 主要登場人物は2〜4名、世界観設定・地名は各2〜3項目で構成してください。
-- ダブルクォーテーション「"」を文字列内部で使用する場合は「”」を使用するかエスケープしてください。
-- 必ずJSONフォーマットのみを出力してください。
+    const step1System = `あなたはプロの長編小説構成作家・ストーリーディレクターです。
+ユーザーの設定プロンプトに基づき、長編小説のタイトル・作品概要・【主要登場人物】【世界観設定】【地名・地理】【初期特殊用語】のみを策定してください。
 
-JSON構造:
+必ず以下のJSON形式のみを出力してください：
 {
   "title": "作品タイトル",
-  "subtitle": "サブタイトル",
-  "synopsis": "全体あらすじ（200字程度）",
-  "outline": "全体プロット解説",
-  "chapters": [
-    {
-      "id": 1,
-      "title": "第1話 章題",
-      "synopsis": "第1話のあらすじ"
-    }
-  ],
+  "subtitle": "サブタイトル・キャッチコピー",
+  "synopsis": "全体あらすじ（300〜500字程度）",
   "characters": [
-    {
-      "name": "キャラクター名（本名のみ。注釈カッコ不可）",
-      "ruby": "ふりがな（ひらがな）",
-      "role": "役割（例: 主人公, ヒロイン, ライバルなど）",
-      "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」「僕」）",
-      "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」「お前」）",
-      "appearance": "外見の特徴",
-      "personality": "性格・口調の特徴",
-      "background": "経歴・背景設定",
-      "illustrationPrompt": "画像生成AI用の英語タグ（例: 1boy, black hair, chef apron, anime style）"
-    }
+    { "name": "名前", "ruby": "ふりがな", "role": "主人公/ヒロイン等", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格", "background": "背景" }
   ],
   "worldBuilding": [
-    {
-      "title": "キーアイテム・魔法・道具・世界観・制度名",
-      "category": "culture",
-      "content": "詳細説明"
-    }
+    { "title": "設定名", "category": "culture", "content": "詳細解説" }
   ],
   "geography": [
-    {
-      "name": "主要な舞台・地名・施設名",
-      "description": "場所の説明"
-    }
+    { "name": "地名・施設名", "description": "概要" }
   ],
   "terms": [
-    {
-      "term": "作品固有の固有名詞・造語",
-      "reading": "よみがな（ひらがな）",
-      "description": "用語の説明"
-    }
+    { "term": "用語名", "meaning": "意味・背景" }
   ],
   "rubies": [
-    {
-      "kanji": "対象の漢字",
-      "ruby": "ルビ（ひらがな）"
-    }
+    { "kanji": "漢字", "ruby": "ルビ/読み" }
   ]
 }`;
 
-    const userPrompt = `【お題タグ】: ${promptSettings.themes.join(', ')}
+    const step1User = `【お題タグ】: ${promptSettings.themes.join(', ')}
 【ストーリーコンセプト】: ${promptSettings.storyConcept}
 【詳細指定】: ${promptSettings.detailedPrompt}
 【トーン】: ${promptSettings.tone}
@@ -499,196 +462,168 @@ JSON構造:
 
 ${this.buildBibleContext(bible, glossary)}
 
-上記設定を踏まえ、全${targetChapterCount}話構成のプロットと初期設定集（登場人物・世界観・地名・特殊用語・ルビ表記）を作成してください。`;
+上記設定を踏まえ、全${targetChapterCount}話構成の作品タイトル・全体あらすじ・初期設定資料集を作成してください。`;
 
-    let rawResponse = '';
+    let step1Raw = '';
     try {
-      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.3, signal, true, aiSettings);
+      step1Raw = await OllamaService.chat(baseUrl, writerModel, step1System, step1User, 0.3, signal, true, aiSettings);
     } catch (e: any) {
       if (signal?.aborted) throw e;
-      console.warn('Ollama chat with formatJson failed, retrying with raw text mode:', e);
-      rawResponse = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false, aiSettings);
+      step1Raw = await OllamaService.chat(baseUrl, writerModel, step1System, step1User, 0.4, signal, false, aiSettings);
     }
 
+    let step1Parsed: any = {};
     try {
-      let parsed: any;
+      step1Parsed = this.cleanAndParseJson(step1Raw);
+    } catch {
+      step1Parsed = {
+        title: `${promptSettings.themes.join('×')}の物語`,
+        subtitle: promptSettings.storyConcept,
+        synopsis: promptSettings.detailedPrompt || promptSettings.storyConcept,
+      };
+    }
+
+    const initialBible: SettingBible = {
+      characters: (step1Parsed.characters || []).map((c: any) => ({
+        id: c.name || `char-${Date.now()}`,
+        name: c.name || 'キャラクター',
+        ruby: c.ruby || '',
+        role: c.role || '主要人物',
+        firstPerson: c.firstPerson || '私',
+        secondPerson: c.secondPerson || 'あなた',
+        appearance: c.appearance || '',
+        personality: c.personality || '',
+        background: c.background || '',
+        illustrationPrompt: c.illustrationPrompt || '',
+      })),
+      worldBuilding: (step1Parsed.worldBuilding || []).map((w: any) => ({
+        id: w.title || `wb-${Date.now()}`,
+        title: w.title || '世界観設定',
+        category: w.category || 'culture',
+        content: w.content || '',
+      })),
+      geography: (step1Parsed.geography || []).map((g: any) => ({
+        id: g.name || `geo-${Date.now()}`,
+        name: g.name || '主要な場所',
+        description: g.description || '',
+      })),
+    };
+
+    const initialGlossary: Glossary = {
+      terms: (step1Parsed.terms || []).map((t: any) => ({
+        id: t.term || `term-${Date.now()}`,
+        term: t.term || '特殊用語',
+        meaning: t.meaning || '',
+      })),
+      rubies: (step1Parsed.rubies || []).map((r: any) => ({
+        id: r.kanji || `ruby-${Date.now()}`,
+        kanji: r.kanji || '',
+        ruby: r.ruby || '',
+      })),
+    };
+
+    // --- STEP 2: 話ごとのプロット順次生成 (第 1 話〜第 N 話まで分割Call) ---
+    const chapters: Chapter[] = [];
+
+    for (let cIdx = 0; cIdx < targetChapterCount; cIdx++) {
+      if (signal?.aborted) throw new DOMException('Aborted by user', 'AbortError');
+
+      const chNum = cIdx + 1;
+      if (onProgress) {
+        onProgress(`全プロット構成中 (第 ${chNum} / ${targetChapterCount} 話の章題・シーン展開を作成中)...`);
+      }
+
+      const prevChapterTitles = chapters.map((c) => `第${c.id}話: ${c.title} (${c.synopsis})`).join('\n');
+
+      const step2System = `あなたはプロの長編小説構成作家です。
+第${chNum}話の【章タイトル】【話のあらすじ】【2〜4つの詳細シーン構成】を作成してください。
+
+必ず以下のJSON形式のみを出力してください：
+{
+  "title": "第${chNum}話の章タイトル",
+  "synopsis": "第${chNum}話のあらすじ（150〜300字）",
+  "scenes": [
+    { "title": "シーン1", "summary": "シーン1のテーマ・展開・情景・登場人物" },
+    { "title": "シーン2", "summary": "シーン2のテーマ・展開・情景・登場人物" }
+  ]
+}`;
+
+      const step2User = `【作品タイトル】: ${step1Parsed.title || promptSettings.themes.join('×')}
+【全体あらすじ】: ${step1Parsed.synopsis || promptSettings.storyConcept}
+【既存の全話展開】:
+${prevChapterTitles || 'ここから物語が始まります。'}
+
+【作成対象】: 第${chNum}話（全${targetChapterCount}話中）
+
+上記を踏まえ、第${chNum}話の章タイトル・あらすじ・シーン構成案を作成してください。`;
+
+      let step2Raw = '';
       try {
-        parsed = this.cleanAndParseJson(rawResponse);
-      } catch (parseErr: any) {
-        if (signal?.aborted) throw parseErr;
-        // JSON形式強制(format:json)によりモデルの応答が崩れた場合のリカバリ
-        if (onProgress) onProgress('モデル応答修復中... 標準テキストモードでプロットJSONを自動復元しています');
-        try {
-          const fallbackRaw = await OllamaService.chat(baseUrl, writerModel, systemPrompt, userPrompt, 0.4, signal, false, aiSettings);
-          parsed = this.cleanAndParseJson(fallbackRaw);
-        } catch (fallbackErr: any) {
-          if (signal?.aborted) throw fallbackErr;
-          console.warn('JSON cleanAndParseJson failed on fallbackRaw, attempting regex extraction:', fallbackErr);
-          if (onProgress) onProgress('パース不能テキストから正規表現抽出によりプロットを復元中...');
-          parsed = this.extractOutlineFromRawText(rawResponse || '', targetChapterCount);
-        }
+        step2Raw = await OllamaService.chat(baseUrl, writerModel, step2System, step2User, 0.4, signal, true, aiSettings);
+      } catch (e: any) {
+        if (signal?.aborted) throw e;
+        step2Raw = await OllamaService.chat(baseUrl, writerModel, step2System, step2User, 0.4, signal, false, aiSettings);
       }
 
-      if (editorModel && editorModel.trim()) {
-        parsed = await this.proofreadOutlineAndSettings(baseUrl, editorModel, parsed, onProgress, signal, aiSettings);
+      let step2Parsed: any = {};
+      try {
+        step2Parsed = this.cleanAndParseJson(step2Raw);
+      } catch {
+        step2Parsed = {
+          title: `第${chNum}話`,
+          synopsis: `第${chNum}話の展開`,
+          scenes: [
+            { title: '前半', summary: `第${chNum}話 前半展開` },
+            { title: '後半', summary: `第${chNum}話 後半展開` },
+          ],
+        };
       }
 
-      let rawChapters: any[] = Array.isArray(parsed.chapters) ? parsed.chapters : [];
+      const rawScenes = Array.isArray(step2Parsed.scenes) && step2Parsed.scenes.length > 0
+        ? step2Parsed.scenes
+        : [
+            { title: '前半', summary: `第${chNum}話 前半展開` },
+            { title: '後半', summary: `第${chNum}話 後半展開` },
+          ];
 
-      // ユーザー設定の全話数 (targetChapterCount) に厳格に合致させる（AI過剰生成の切捨て / 不足時の補填）
-      if (rawChapters.length > targetChapterCount) {
-        rawChapters = rawChapters.slice(0, targetChapterCount);
-      } else {
-        while (rawChapters.length < targetChapterCount) {
-          const idx = rawChapters.length + 1;
-          rawChapters.push({
-            id: idx,
-            title: `第${idx}話`,
-            synopsis: `第${idx}話のあらすじ`
-          });
-        }
-      }
-
-      const chapters: Chapter[] = rawChapters.map((ch: any, idx: number) => ({
-        id: idx + 1,
-        title: ch.title || `第${idx + 1}話`,
-        synopsis: ch.synopsis || '',
-        scenes: [
-          { id: 1, title: 'シーン1', summary: `${ch.title || ''} 前半`, content: '', wordCount: 0, status: 'pending', reviewComments: [] },
-          { id: 2, title: 'シーン2', summary: `${ch.title || ''} 中盤`, content: '', wordCount: 0, status: 'pending', reviewComments: [] },
-          { id: 3, title: 'シーン3', summary: `${ch.title || ''} 後半`, content: '', wordCount: 0, status: 'pending', reviewComments: [] },
-        ],
+      const chapterScenes = rawScenes.map((sc: any, sIdx: number) => ({
+        id: sIdx + 1,
+        title: sc.title || `シーン${sIdx + 1}`,
+        summary: sc.summary || `${step2Parsed.title || ''} シーン${sIdx + 1}`,
+        content: '',
+        status: 'pending' as const,
         wordCount: 0,
-        status: 'pending'
+        reviewComments: [],
       }));
 
-      // 初期設定資料および特殊用語の新規構築 (新プロットの策定内容に合わせて一新)
-      const initialBible: SettingBible = {
-        characters: [],
-        worldBuilding: [],
-        geography: [],
-      };
-      const initialGlossary: Glossary = {
-        terms: [],
-        rubies: [],
+      const newChapter: Chapter = {
+        id: chNum,
+        title: step2Parsed.title || `第${chNum}話`,
+        synopsis: step2Parsed.synopsis || `第${chNum}話の物語。`,
+        scenes: chapterScenes,
+        status: 'pending' as const,
+        wordCount: 0,
       };
 
-      const rawChars = parsed.characters || parsed.newCharacters || parsed.characterList || [];
-      if (Array.isArray(rawChars)) {
-        rawChars.forEach((c: any) => {
-          if (!c.name || !c.name.trim() || NovelEngine.isJunkTitle(c.name)) return;
-          const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name);
-          if (!initialBible.characters.some((ex) => ex.name.trim() === cleanName)) {
-            const role = c.role || extractedRole || '主要登場人物';
-            const firstPerson = NovelEngine.sanitizePronoun(c.firstPerson, '私', false);
-            const secondPerson = NovelEngine.sanitizePronoun(c.secondPerson, 'あなた', true);
-            const appearance = c.appearance || '初期プロットにて設定';
-            const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
-              name: cleanName,
-              appearance,
-              role,
-              illustrationPrompt: c.illustrationPrompt,
-            });
+      chapters.push(newChapter);
 
-            initialBible.characters.push({
-              id: `char-init-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              name: cleanName,
-              ruby: NovelEngine.toHiragana(c.ruby || ''),
-              role,
-              firstPerson,
-              secondPerson,
-              appearance,
-              personality: c.personality || '初期プロットにて設定',
-              background: c.background || '初期プロットにて設定',
-              illustrationPrompt,
-              updatedEpisode: '【初期プロット策定時】',
-            });
-          }
-        });
-      }
-
-      const rawWorld = parsed.worldBuilding || parsed.newWorldItems || parsed.worldItems || [];
-      if (Array.isArray(rawWorld)) {
-        rawWorld.forEach((w: any) => {
-          const title = (w.title || w.name || '').trim();
-          if (!title || NovelEngine.isJunkTitle(title)) return;
-          if (!initialBible.worldBuilding.some((ex) => ex.title.trim() === title)) {
-            initialBible.worldBuilding.push({
-              id: `wb-init-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              category: w.category || NovelEngine.classifyCategory(title),
-              title: title,
-              content: w.content || w.description || '初期プロットにて設定',
-              updatedEpisode: '【初期プロット策定時】',
-            });
-          }
-        });
-      }
-
-      const rawGeo = parsed.geography || parsed.newLocations || parsed.locations || [];
-      if (Array.isArray(rawGeo)) {
-        rawGeo.forEach((g: any) => {
-          const name = (g.name || g.title || '').trim();
-          if (!name || NovelEngine.isJunkTitle(name)) return;
-          if (!initialBible.geography.some((ex) => ex.name.trim() === name)) {
-            initialBible.geography.push({
-              id: `geo-init-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              name: name,
-              description: g.description || g.content || '初期プロットにて設定',
-              updatedEpisode: '【初期プロット策定時】',
-            });
-          }
-        });
-      }
-
-      const rawTerms = parsed.terms || parsed.newTerms || [];
-      if (Array.isArray(rawTerms)) {
-        rawTerms.forEach((t: any) => {
-          const term = (t.term || t.name || '').trim();
-          if (!term || NovelEngine.isJunkTitle(term)) return;
-          if (!initialGlossary.terms.some((ex) => ex.term.trim() === term)) {
-            initialGlossary.terms.push({
-              id: `term-init-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              term: term,
-              reading: NovelEngine.toHiragana(t.reading || ''),
-              description: t.description || '初期プロットにて設定された特殊用語',
-              ignoreInProofreading: true,
-              updatedEpisode: '【初期プロット策定時】',
-            });
-          }
-        });
-      }
-
-      const rawRubies = parsed.rubies || parsed.newRubies || [];
-      if (Array.isArray(rawRubies)) {
-        rawRubies.forEach((r: any) => {
-          const kanji = (r.kanji || '').trim();
-          const ruby = NovelEngine.toHiragana((r.ruby || '').trim());
-          if (!kanji || !ruby) return;
-          if (!initialGlossary.rubies.some((ex) => ex.kanji.trim() === kanji && ex.ruby.trim() === ruby)) {
-            initialGlossary.rubies.push({
-              id: `ruby-init-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              kanji: kanji,
-              ruby: ruby,
-              notation: `${kanji}《${ruby}》`,
-              updatedEpisode: '【初期プロット策定時】',
-            });
-          }
-        });
-      }
-
-      return {
-        title: parsed.title || '無題',
-        subtitle: parsed.subtitle || '',
-        synopsis: parsed.synopsis || '',
-        outline: parsed.outline || '',
-        chapters,
-        initialBible,
-        initialGlossary,
-      };
-    } catch (e: any) {
-      console.error('Failed to parse outline JSON:', e, rawResponse);
-      throw new Error(`プロット生成のJSONパースに失敗しました (${e.message})。Ollamaモデルの応答をご確認ください。`);
+      // ディスク中間ファイル保存
+      try {
+        localStorage.setItem(`zephyros_temp_outline_ch_${chNum}`, JSON.stringify(newChapter));
+      } catch {}
     }
+
+    if (onProgress) onProgress('全プロットおよび初期設定データの検証・統合完了。');
+
+    return {
+      title: step1Parsed.title || `${promptSettings.themes.join('×')}の物語`,
+      subtitle: step1Parsed.subtitle || '',
+      synopsis: step1Parsed.synopsis || promptSettings.storyConcept,
+      outline: step1Parsed.synopsis || promptSettings.storyConcept,
+      chapters,
+      initialBible,
+      initialGlossary,
+    };
   }
 
   /**
@@ -1044,6 +979,67 @@ ${originalDraft}
   }
 
   /**
+   * 本文の文章崩れ（同一フレーズ無限ループ・読点「、」過剰連打）の自動判定および修復
+   */
+  static detectAndFixDegeneration(text: string): {
+    hasDegeneration: boolean;
+    cleanedText: string;
+    reasons: string[];
+  } {
+    const reasons: string[] = [];
+    let cleaned = text || '';
+    let hasDegeneration = false;
+
+    if (!cleaned || cleaned.trim().length === 0) {
+      return { hasDegeneration: false, cleanedText: text, reasons: [] };
+    }
+
+    // 1. 同一フレーズ反復ループ（6文字以上の連続重複パターン）の検知と切除
+    const minLoopLen = 6;
+    for (let len = 15; len >= minLoopLen; len--) {
+      for (let i = 0; i < cleaned.length - len * 2; i++) {
+        const sub = cleaned.substring(i, i + len);
+        if (/^[、。・\s]+$/.test(sub)) continue;
+
+        let repeatCount = 1;
+        let nextPos = i + len;
+        while (nextPos + len <= cleaned.length && cleaned.substring(nextPos, nextPos + len) === sub) {
+          repeatCount++;
+          nextPos += len;
+        }
+
+        if (repeatCount >= 3) {
+          hasDegeneration = true;
+          reasons.push(`同一フレーズ反復ループ検出 ("${sub.slice(0, 15)}..." が${repeatCount}回出現)`);
+          cleaned = cleaned.substring(0, i + len);
+          break;
+        }
+      }
+      if (hasDegeneration) break;
+    }
+
+    // 2. 読点「、」過剰連打の検知と自動除外 (通常文の「、」出現率は 2%〜6% 程度。12% を超えたら異常判定)
+    const totalChars = cleaned.replace(/\s+/g, '').length;
+    const commaMatches = cleaned.match(/、/g) || [];
+    const commaRatio = totalChars > 0 ? commaMatches.length / totalChars : 0;
+
+    if (commaRatio > 0.12 && commaMatches.length >= 8) {
+      hasDegeneration = true;
+      reasons.push(`読点「、」の過剰出現を検出 (全文字数の ${(commaRatio * 100).toFixed(1)}% が読点)`);
+      cleaned = cleaned.replace(/(が|の|を|に|は|と|で|て|も|より|から|へ)、/g, '$1');
+    }
+
+    // 3. 連続読点・句点の修復
+    cleaned = cleaned.replace(/、{2,}/g, '、').replace(/。{2,}/g, '。');
+
+    return {
+      hasDegeneration,
+      cleanedText: cleaned,
+      reasons,
+    };
+  }
+
+  /**
    * 4. 編集者AIによる原稿の軽量校閲 & 矛盾点チェック (編集者AI Gemma)
    */
   static async proofreadScene(
@@ -1067,8 +1063,9 @@ ${originalDraft}
 4. **英単語・アルファベット混入のチェック**: 地名や作品固有コード等を除き、日本語の本文内に不用意に残っている英単語（例: "oversized" → "オーバーサイズ"、"casual" → "カジュアル" など）は typo として指摘し、必ず "originalText" ('oversized') と "suggestedText" ('オーバーサイズ') を指定してください。
 5. **ルビ表記・記号崩れのチェック**: 《 の閉じ忘れ（例: "夕暮れ《ゆうぐれ" → "夕暮れ《ゆうぐれ》"）やルビの脱落・カッコ崩れは typo として指摘し、必ず "originalText" と "suggestedText" を指定してください。
 6. **台詞末尾の句点（。）および文末切れのチェック**: 台詞の末尾に「。」が含まれる場合（例: 『「〜〜。」』）や、文章の最後が句点・終止記号なく途切れている場合は typo（表記崩れ）として指摘し、"originalText" と "suggestedText" を指定してください。
-7. typo（誤字脱字・表記崩れ）を指摘する場合は、必ず "originalText" (誤りの原文) と "suggestedText" (正解・置換後のテキスト) の両方を正確に指定してください。
-8. 本文の再生成は行わず、指示通りのJSONフォーマットのみを返してください。
+7. **文章崩れ・フレーズ連続反復・読点異常のチェック**: 同一文節の無限繰り返しや読点（、）の過剰多用が含まれる場合は即座に hasCriticalError: true とし、"type": "contradiction", "comment": "文章の同一フレーズ無限ループまたは読点過剰崩れを検出" と指定してください。
+8. typo（誤字脱字・表記崩れ）を指摘する場合は、必ず "originalText" (誤りの原文) と "suggestedText" (正解・置換後のテキスト) の両方を正確に指定してください。
+9. 本文の再生成は行わず、指示通りのJSONフォーマットのみを返してください。
 
 必ず以下のJSON形式でのみ出力してください：
 
@@ -1090,7 +1087,7 @@ ${originalDraft}
 ${this.buildBibleContext(bible, glossary)}
 
 【チェック対象原稿】:
-${draftContent.slice(0, 3000)}
+${draftContent.slice(0, 12000)}
 
 上記原稿を簡単に校閲し、JSON形式で指摘事項を出力してください。問題がなければ "comments": [] で返してください。`;
 

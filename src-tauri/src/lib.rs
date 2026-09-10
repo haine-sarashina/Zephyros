@@ -156,7 +156,7 @@ fn ollama_chat_raw(url: String, body: String) -> Result<String, String> {
     for ep in &endpoints {
         match ureq::post(ep)
             .set("Content-Type", "application/json")
-            .timeout(std::time::Duration::from_secs(300))
+            .timeout(std::time::Duration::from_secs(3600))
             .send_string(&body)
         {
             Ok(resp) => {
@@ -202,7 +202,7 @@ fn ollama_chat_stream_raw(
     for ep in &endpoints {
         match ureq::post(ep)
             .set("Content-Type", "application/json")
-            .timeout(std::time::Duration::from_secs(600))
+            .timeout(std::time::Duration::from_secs(3600))
             .send_string(&body)
         {
             Ok(r) => {

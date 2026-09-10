@@ -4,32 +4,50 @@ import { NovelEngine } from '../services/novelEngine';
 import { Cpu, Play, Pause, ShieldCheck, FileText, Sparkles, RefreshCw, RotateCcw } from 'lucide-react';
 
 interface GeneratorViewProps {
+  projectId: string;
   promptSettings: PromptSettings;
   bible: SettingBible;
   glossary: Glossary;
   aiSettings: AISettings;
   novelData: NovelData | null;
   editorLogs?: string[];
-  onSaveNovelData: (data: NovelData) => void;
-  onSaveBible: (bible: SettingBible) => void;
-  onSaveGlossary: (glossary: Glossary) => void;
-  onSaveBibleAndGlossary?: (bible: SettingBible, glossary: Glossary) => void;
-  onSaveEditorLogs?: (logs: string[]) => void;
+  onSaveNovelData: (data: NovelData, projectId?: string) => void;
+  onSaveBible: (bible: SettingBible, projectId?: string) => void;
+  onSaveGlossary: (glossary: Glossary, projectId?: string) => void;
+  onSaveBibleAndGlossary?: (bible: SettingBible, glossary: Glossary, projectId?: string) => void;
+  onSaveEditorLogs?: (logs: string[], projectId?: string) => void;
   onViewManuscript: () => void;
 }
 
-// タブ遷移（コンポーネントアンマウント）後も状態を維持するグローバル生成セッション
-const globalSession = {
-  isGenerating: false,
-  currentStatus: '待機中',
-  activeChapterIndex: 0,
-  activeSceneIndex: 0,
-  streamingText: '',
-  editorLog: [] as string[],
-  abortController: null as AbortController | null,
-};
+interface ProjectSession {
+  isGenerating: boolean;
+  currentStatus: string;
+  activeChapterIndex: number;
+  activeSceneIndex: number;
+  streamingText: string;
+  editorLog: string[];
+  abortController: AbortController | null;
+}
+
+const projectSessions: Record<string, ProjectSession> = {};
+
+function getProjectSession(projectId: string): ProjectSession {
+  if (!projectSessions[projectId]) {
+    projectSessions[projectId] = {
+      isGenerating: false,
+      currentStatus: '待機中',
+      activeChapterIndex: 0,
+      activeSceneIndex: 0,
+      streamingText: '',
+      editorLog: [],
+      abortController: null,
+    };
+  }
+  return projectSessions[projectId];
+}
 
 export const GeneratorView: React.FC<GeneratorViewProps> = ({
+  projectId,
   promptSettings,
   bible,
   glossary,
@@ -50,59 +68,67 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
   }, [novelData]);
 
   const currentNovelData = localNovelData || novelData;
+  const currentSession = getProjectSession(projectId);
 
-  // コンポーネント再マウント時にもグローバルセッションまたは保存済みログから状態を復元
-  const [isGenerating, setIsGeneratingState] = useState<boolean>(globalSession.isGenerating);
-  const [currentStatus, setCurrentStatusState] = useState<string>(globalSession.currentStatus);
-  const [startChapterIndex, setStartChapterIndex] = useState<number>(globalSession.activeChapterIndex);
-  const [activeChapterIndex, setActiveChapterIndexState] = useState<number>(globalSession.activeChapterIndex);
-  const [activeSceneIndex, setActiveSceneIndexState] = useState<number>(globalSession.activeSceneIndex);
-  const [streamingText, setStreamingTextState] = useState<string>(globalSession.streamingText);
+  // コンポーネント再マウント時にも作品別セッションまたは保存済みログから状態を復元
+  const [isGenerating, setIsGeneratingState] = useState<boolean>(currentSession.isGenerating);
+  const [currentStatus, setCurrentStatusState] = useState<string>(currentSession.currentStatus);
+  const [startChapterIndex, setStartChapterIndex] = useState<number>(currentSession.activeChapterIndex);
+  const [activeChapterIndex, setActiveChapterIndexState] = useState<number>(currentSession.activeChapterIndex);
+  const [activeSceneIndex, setActiveSceneIndexState] = useState<number>(currentSession.activeSceneIndex);
+  const [streamingText, setStreamingTextState] = useState<string>(currentSession.streamingText);
 
   const initialLogs = editorLogs || [];
   const [editorLog, setEditorLogState] = useState<string[]>(initialLogs);
 
   const streamingEndRef = useRef<HTMLDivElement>(null);
 
-  // 親からの editorLogs または novelData 変更時の同期（別作品・新規作品への切り替え時にログの混入を防止）
+  // 親からの editorLogs または novelData/projectId 変更時の同期（別作品切り替え時に他作品のログが混入するのを完璧に遮断）
   useEffect(() => {
+    const session = getProjectSession(projectId);
+    setIsGeneratingState(session.isGenerating);
+    setCurrentStatusState(session.currentStatus);
+    setActiveChapterIndexState(session.activeChapterIndex);
+    setActiveSceneIndexState(session.activeSceneIndex);
+    setStreamingTextState(session.streamingText);
+
     const currentLogs = editorLogs || [];
     setEditorLogState(currentLogs);
-    globalSession.editorLog = currentLogs;
+    session.editorLog = currentLogs;
 
-    if (!globalSession.isGenerating) {
-      globalSession.streamingText = '';
-      globalSession.currentStatus = '待機中';
+    if (!session.isGenerating) {
+      session.streamingText = '';
+      session.currentStatus = '待機中';
       setStreamingTextState('');
       setCurrentStatusState('待機中');
     }
-  }, [editorLogs, novelData?.title]);
+  }, [projectId, editorLogs, novelData?.title]);
 
-  // ステート変更をグローバルセッションおよび親へ同期永続化
+  // ステート変更を作品別セッションおよび親へ同期永続化
   const setIsGenerating = (val: boolean) => {
-    globalSession.isGenerating = val;
+    currentSession.isGenerating = val;
     setIsGeneratingState(val);
   };
 
   const setCurrentStatus = (status: string) => {
-    globalSession.currentStatus = status;
+    currentSession.currentStatus = status;
     setCurrentStatusState(status);
   };
 
   const setActiveChapterIndex = (idx: number) => {
-    globalSession.activeChapterIndex = idx;
+    currentSession.activeChapterIndex = idx;
     setActiveChapterIndexState(idx);
   };
 
   const setActiveSceneIndex = (idx: number) => {
-    globalSession.activeSceneIndex = idx;
+    currentSession.activeSceneIndex = idx;
     setActiveSceneIndexState(idx);
   };
 
   const setStreamingText = (updater: string | ((prev: string) => string)) => {
     setStreamingTextState((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      globalSession.streamingText = next;
+      currentSession.streamingText = next;
       return next;
     });
   };
@@ -128,9 +154,9 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
     setEditorLogState((prev) => {
       const rawNext = typeof updater === 'function' ? updater(prev) : updater;
       const formattedNext = rawNext.map(formatLogWithTimestamp);
-      globalSession.editorLog = formattedNext;
+      currentSession.editorLog = formattedNext;
       if (onSaveEditorLogs) {
-        onSaveEditorLogs(formattedNext);
+        onSaveEditorLogs(formattedNext, projectId);
       }
       return formattedNext;
     });
@@ -145,7 +171,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
 
   // novelData 変更時に未完了の最初の章を自動検出して startChapterIndex に設定（非実行時のみ）
   useEffect(() => {
-    if (!globalSession.isGenerating && currentNovelData && currentNovelData.chapters.length > 0) {
+    if (!currentSession.isGenerating && currentNovelData && currentNovelData.chapters.length > 0) {
       let needsSave = false;
       const updatedNovel: NovelData = JSON.parse(JSON.stringify(currentNovelData));
       updatedNovel.chapters.forEach((ch) => {
@@ -169,7 +195,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
       } else {
         setStartChapterIndex(0);
         setActiveChapterIndex(0);
-        if (globalSession.currentStatus === '待機中' || globalSession.currentStatus.includes('完了')) {
+        if (currentSession.currentStatus === '待機中' || currentSession.currentStatus.includes('完了')) {
           setCurrentStatus(`全${targetData.chapters.length}話の執筆・校閲がすべて完了しました！（完結）`);
         }
       }
@@ -178,6 +204,15 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
 
   // 1. プロット全体生成
   const handleGenerateOutline = async () => {
+    // 別の作品の生成が進行中の場合はそれを安全に中断
+    Object.entries(projectSessions).forEach(([id, s]) => {
+      if (id !== projectId && s.isGenerating) {
+        s.abortController?.abort();
+        s.isGenerating = false;
+        s.currentStatus = '他作品の生成が開始されたため中断されました';
+      }
+    });
+
     if (currentNovelData && currentNovelData.chapters.some((ch) => ch.scenes.some((sc) => sc.content && sc.content.trim().length > 0))) {
       if (!window.confirm('プロットを再生成すると、現在のプロット構成および執筆済みの原稿データが上書きされてリセットされます。実行してもよろしいですか？')) {
         return;
@@ -190,7 +225,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
 
     setIsGenerating(true);
     const controller = new AbortController();
-    globalSession.abortController = controller;
+    currentSession.abortController = controller;
 
     setCurrentStatus(`執筆者AI (${aiSettings.writerModel}) が全話のプロット・構成案を策定中...`);
     setEditorLog(['[システム] プロット生成セッションを開始しました。']);
@@ -246,13 +281,13 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
       const nextGlossary = result.initialGlossary || glossary;
 
       if (onSaveBibleAndGlossary) {
-        onSaveBibleAndGlossary(nextBible, nextGlossary);
+        onSaveBibleAndGlossary(nextBible, nextGlossary, projectId);
       } else {
-        if (result.initialBible) onSaveBible(result.initialBible);
-        if (result.initialGlossary) onSaveGlossary(result.initialGlossary);
+        if (result.initialBible) onSaveBible(result.initialBible, projectId);
+        if (result.initialGlossary) onSaveGlossary(result.initialGlossary, projectId);
       }
 
-      onSaveNovelData(newNovel);
+      onSaveNovelData(newNovel, projectId);
       setLocalNovelData(newNovel);
       setStartChapterIndex(0);
       setActiveChapterIndex(0);
@@ -282,13 +317,22 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
       }
     } finally {
       setIsGenerating(false);
-      globalSession.abortController = null;
+      currentSession.abortController = null;
     }
   };
 
   // 2. 既にある生成済み原稿を一括スキャンして設定資料集 ＆ 特殊用語辞典へ反映
   // 3. 本文全自動執筆 & 校閲 ＆ 設定資料集・特殊用語自動抽出更新ループ
   const handleStartFullGeneration = async () => {
+    // 別の作品の生成が進行中の場合はそれを安全に中断
+    Object.entries(projectSessions).forEach(([id, s]) => {
+      if (id !== projectId && s.isGenerating) {
+        s.abortController?.abort();
+        s.isGenerating = false;
+        s.currentStatus = '他作品の生成が開始されたため中断されました';
+      }
+    });
+
     if (!currentNovelData || currentNovelData.chapters.length === 0) {
       alert('先にプロットを生成してください。');
       return;
@@ -313,13 +357,13 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
         ch.wordCount = 0;
       });
       currentNovel.totalWordCount = 0;
-      onSaveNovelData(currentNovel);
+      onSaveNovelData(currentNovel, projectId);
       setLocalNovelData(currentNovel);
     }
 
     setIsGenerating(true);
     const controller = new AbortController();
-    globalSession.abortController = controller;
+    currentSession.abortController = controller;
 
     try {
       setEditorLog((prev) => [
@@ -345,7 +389,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
           }
 
           // 中断チェック
-          if (globalSession.abortController?.signal.aborted) {
+          if (currentSession.abortController?.signal.aborted) {
             throw new DOMException('Aborted by user', 'AbortError');
           }
 
@@ -409,7 +453,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                     return updated;
                   });
                 },
-                globalSession.abortController.signal,
+                currentSession.abortController.signal,
                 aiSettings
               );
 
@@ -462,7 +506,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                   latestGlossary,
                   chapter.title,
                   prevSummary,
-                  globalSession.abortController.signal,
+                  currentSession.abortController.signal,
                   aiSettings
                 );
 
@@ -526,7 +570,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                             return updated;
                           });
                         },
-                        globalSession.abortController.signal
+                        currentSession.abortController.signal
                       );
 
                       const rewriteDegen = NovelEngine.detectAndFixDegeneration(draftedContent);
@@ -591,7 +635,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                 latestBible,
                 latestGlossary,
                 episodeTag,
-                globalSession.abortController.signal
+                currentSession.abortController.signal
               );
 
               latestBible = extractResult.updatedBible;
@@ -604,10 +648,10 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
               }
 
               if (onSaveBibleAndGlossary) {
-                onSaveBibleAndGlossary(latestBible, latestGlossary);
+                onSaveBibleAndGlossary(latestBible, latestGlossary, projectId);
               } else {
-                onSaveBible(latestBible);
-                if (onSaveGlossary) onSaveGlossary(latestGlossary);
+                onSaveBible(latestBible, projectId);
+                if (onSaveGlossary) onSaveGlossary(latestGlossary, projectId);
               }
 
               // 原稿データ更新
@@ -621,12 +665,12 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
               currentNovel.totalWordCount = currentNovel.chapters.reduce((sum, ch) => sum + ch.wordCount, 0);
               currentNovel.lastUpdatedDate = new Date().toLocaleDateString();
 
-              onSaveNovelData(currentNovel);
+              onSaveNovelData(currentNovel, projectId);
               setLocalNovelData(currentNovel);
 
               sceneSuccess = true;
             } catch (sceneErr: any) {
-              if (sceneErr.name === 'AbortError' || globalSession.abortController?.signal.aborted) {
+              if (sceneErr.name === 'AbortError' || currentSession.abortController?.signal.aborted) {
                 throw sceneErr;
               }
 
@@ -645,7 +689,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
           }
         }
         chapter.status = 'completed';
-        onSaveNovelData(currentNovel);
+        onSaveNovelData(currentNovel, projectId);
         setLocalNovelData(currentNovel);
       }
 
@@ -660,13 +704,13 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
       }
     } finally {
       setIsGenerating(false);
-      globalSession.abortController = null;
+      currentSession.abortController = null;
     }
   };
 
   const handlePause = () => {
-    if (globalSession.abortController) {
-      globalSession.abortController.abort();
+    if (currentSession.abortController) {
+      currentSession.abortController.abort();
     }
   };
 

@@ -189,8 +189,16 @@ export function App() {
     (activeProject.novelData.chapters.length > 0 || activeProject.novelData.totalWordCount > 0)
   );
 
-  const handleSavePrompt = (newSettings: PromptSettings) => {
-    const current = getCurrentProject();
+  const getTargetProject = (targetId?: string) => {
+    if (targetId) {
+      const p = StoreManager.getProjectById(targetId);
+      if (p) return p;
+    }
+    return getCurrentProject();
+  };
+
+  const handleSavePrompt = (newSettings: PromptSettings, projectId?: string) => {
+    const current = getTargetProject(projectId);
     if (!current) return;
     const writingStarted = Boolean(
       current.novelData &&
@@ -202,32 +210,32 @@ export function App() {
     setProjects(StoreManager.getProjects());
   };
 
-  const handleSaveBible = (newBible: SettingBible) => {
-    const current = getCurrentProject();
+  const handleSaveBible = (newBible: SettingBible, projectId?: string) => {
+    const current = getTargetProject(projectId);
     if (!current) return;
     const updated = { ...current, bible: newBible };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
   };
 
-  const handleSaveGlossary = (newGlossary: Glossary) => {
-    const current = getCurrentProject();
+  const handleSaveGlossary = (newGlossary: Glossary, projectId?: string) => {
+    const current = getTargetProject(projectId);
     if (!current) return;
     const updated = { ...current, glossary: newGlossary };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
   };
 
-  const handleSaveBibleAndGlossary = (newBible: SettingBible, newGlossary: Glossary) => {
-    const current = getCurrentProject();
+  const handleSaveBibleAndGlossary = (newBible: SettingBible, newGlossary: Glossary, projectId?: string) => {
+    const current = getTargetProject(projectId);
     if (!current) return;
     const updated = { ...current, bible: newBible, glossary: newGlossary };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
   };
 
-  const handleSaveNovelData = (newNovelData: NovelData) => {
-    const current = getCurrentProject();
+  const handleSaveNovelData = (newNovelData: NovelData, projectId?: string) => {
+    const current = getTargetProject(projectId);
     if (!current) return;
     const updated = {
       ...current,
@@ -238,8 +246,8 @@ export function App() {
     setProjects(StoreManager.getProjects());
   };
 
-  const handleSaveEditorLogs = (logs: string[]) => {
-    const current = getCurrentProject();
+  const handleSaveEditorLogs = (logs: string[], projectId?: string) => {
+    const current = getTargetProject(projectId);
     if (!current) return;
     const updated = { ...current, editorLogs: logs };
     StoreManager.saveProject(updated);
@@ -319,6 +327,7 @@ export function App() {
         {activeTab === 'generate' && activeProject && (
           <GeneratorView
             key={`generate-${activeProject.id}`}
+            projectId={activeProject.id}
             promptSettings={activeProject.promptSettings}
             bible={activeProject.bible}
             glossary={activeProject.glossary}

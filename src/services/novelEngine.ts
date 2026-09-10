@@ -862,7 +862,8 @@ ${chapterSummaries}
    - ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。
 9. 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な小説本文のみを出力してください。`;
 
-    const userPrompt = `【作品テーマ/トーン】: ${promptSettings.storyConcept} (${promptSettings.tone})
+    const cleanConcept = NovelEngine.sanitizePromptConcept(promptSettings.storyConcept);
+    const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene.summary})
 【これまでのあらすじ・直前シーンのラスト本文】:
@@ -936,7 +937,8 @@ ${this.buildBibleContext(bible, glossary)}
       .map((c) => `- 指摘 [${c.type}]: ${c.comment} ${c.originalText ? `(該当箇所: "${c.originalText}")` : ''}`)
       .join('\n');
 
-    const userPrompt = `【作品テーマ/トーン】: ${promptSettings.storyConcept} (${promptSettings.tone})
+    const cleanConcept = NovelEngine.sanitizePromptConcept(promptSettings.storyConcept);
+    const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene?.summary || ''})
 【これまでのあらすじ・直前シーンのラスト本文】: ${previousContextSummary || 'なし'}
@@ -1496,6 +1498,26 @@ ${draftContent.slice(0, 10000)}
     if (/(?:層|室|階|迷宮|ダンジョン|エリア|罠|宝箱|セーフゾーン|洞窟|塔)/.test(title)) return 'dungeon';
     if (/(?:国|王|教|ギルド|システム|法|軍|階級|通貨|帝国|王国|組織)/.test(title)) return 'system';
     return 'culture';
+  }
+
+  /**
+   * JSONやMarkdownコードブロックで汚染されたプロンプトコンセプト文をプレーンテキストに純化
+   */
+  public static sanitizePromptConcept(concept: string): string {
+    if (!concept) return '';
+    let str = concept.trim();
+    if (str.includes('```json') || str.includes('```')) {
+      str = str.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
+    }
+    if (str.startsWith('{') && str.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(str);
+        if (parsed.storyConcept) return this.sanitizePromptConcept(parsed.storyConcept);
+        if (parsed.synopsis) return this.sanitizePromptConcept(parsed.synopsis);
+        if (parsed.detailedPrompt) return this.sanitizePromptConcept(parsed.detailedPrompt);
+      } catch {}
+    }
+    return str;
   }
 
   /**

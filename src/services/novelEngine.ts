@@ -447,10 +447,10 @@ ${JSON.stringify(draftData, null, 2)}
     { "name": "地名・施設名", "description": "概要" }
   ],
   "terms": [
-    { "term": "用語名", "meaning": "意味・背景" }
+    { "term": "用語名", "reading": "よみがな（ひらがな）", "description": "用語の意味・背景・詳細解説" }
   ],
   "rubies": [
-    { "kanji": "漢字", "ruby": "ルビ/読み" }
+    { "kanji": "対象漢字", "ruby": "ルビ/読み（ひらがな）" }
   ]
 }`;
 
@@ -484,42 +484,76 @@ ${this.buildBibleContext(bible, glossary)}
     }
 
     const initialBible: SettingBible = {
-      characters: (step1Parsed.characters || []).map((c: any) => ({
-        id: c.name || `char-${Date.now()}`,
-        name: c.name || 'キャラクター',
-        ruby: c.ruby || '',
-        role: c.role || '主要人物',
-        firstPerson: c.firstPerson || '私',
-        secondPerson: c.secondPerson || 'あなた',
-        appearance: c.appearance || '',
-        personality: c.personality || '',
-        background: c.background || '',
-        illustrationPrompt: c.illustrationPrompt || '',
-      })),
-      worldBuilding: (step1Parsed.worldBuilding || []).map((w: any) => ({
-        id: w.title || `wb-${Date.now()}`,
-        title: w.title || '世界観設定',
-        category: w.category || 'culture',
-        content: w.content || '',
-      })),
-      geography: (step1Parsed.geography || []).map((g: any) => ({
-        id: g.name || `geo-${Date.now()}`,
-        name: g.name || '主要な場所',
-        description: g.description || '',
-      })),
+      characters: (step1Parsed.characters || []).map((c: any, idx: number) => {
+        const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name || `登場人物${idx + 1}`);
+        const role = c.role || extractedRole || '主要人物';
+        const appearance = c.appearance || '初期プロットにて設定';
+        const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
+          name: cleanName,
+          appearance,
+          role,
+          illustrationPrompt: c.illustrationPrompt,
+        });
+        return {
+          id: `char-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          name: cleanName,
+          ruby: NovelEngine.toHiragana(c.ruby || ''),
+          role,
+          firstPerson: NovelEngine.sanitizePronoun(c.firstPerson, '私', false),
+          secondPerson: NovelEngine.sanitizePronoun(c.secondPerson, 'あなた', true),
+          appearance,
+          personality: c.personality || '初期プロットにて設定',
+          background: c.background || '初期プロットにて設定',
+          illustrationPrompt,
+          updatedEpisode: '【初期プロット策定時】',
+        };
+      }),
+      worldBuilding: (step1Parsed.worldBuilding || []).map((w: any, idx: number) => {
+        const title = (w.title || w.name || `設定${idx + 1}`).trim();
+        return {
+          id: `wb-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          category: w.category || NovelEngine.classifyCategory(title),
+          title: title,
+          content: w.content || w.description || '初期プロットにて設定',
+          updatedEpisode: '【初期プロット策定時】',
+        };
+      }),
+      geography: (step1Parsed.geography || []).map((g: any, idx: number) => {
+        const name = (g.name || g.title || `地名${idx + 1}`).trim();
+        return {
+          id: `geo-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          name,
+          description: g.description || g.content || '初期プロットにて設定',
+          updatedEpisode: '【初期プロット策定時】',
+        };
+      }),
     };
 
     const initialGlossary: Glossary = {
-      terms: (step1Parsed.terms || []).map((t: any) => ({
-        id: t.term || `term-${Date.now()}`,
-        term: t.term || '特殊用語',
-        meaning: t.meaning || '',
-      })),
-      rubies: (step1Parsed.rubies || []).map((r: any) => ({
-        id: r.kanji || `ruby-${Date.now()}`,
-        kanji: r.kanji || '',
-        ruby: r.ruby || '',
-      })),
+      terms: (step1Parsed.terms || []).map((t: any, idx: number) => {
+        const term = (t.term || t.name || '').trim();
+        const reading = NovelEngine.toHiragana(t.reading || t.ruby || '');
+        const description = t.description || t.meaning || t.content || '初期プロットにて設定された特殊用語';
+        return {
+          id: `term-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          term: term || '特殊用語',
+          reading: reading,
+          description: description,
+          ignoreInProofreading: true,
+          updatedEpisode: '【初期プロット策定時】',
+        };
+      }),
+      rubies: (step1Parsed.rubies || []).map((r: any, idx: number) => {
+        const kanji = (r.kanji || '').trim();
+        const ruby = NovelEngine.toHiragana((r.ruby || '').trim());
+        return {
+          id: `ruby-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          kanji: kanji || '漢字',
+          ruby: ruby || 'ルビ',
+          notation: kanji && ruby ? `${kanji}《${ruby}》` : kanji || ruby,
+          updatedEpisode: '【初期プロット策定時】',
+        };
+      }),
     };
 
     // --- STEP 2: 話ごとのプロット順次生成 (第 1 話〜第 N 話まで分割Call) ---

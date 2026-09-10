@@ -12,9 +12,23 @@ export const GlossaryView: React.FC<GlossaryViewProps> = ({ glossary, onSave, on
   const [glossaryState, setGlossaryState] = useState<Glossary>(glossary);
   const [savedNotice, setSavedNotice] = useState(false);
 
-  // 親コンポーネントからの glossary 変更 (一括抽出スキャン等の更新) をリアルタイム同期
+  // 親コンポーネントからの glossary 変更 (一括抽出スキャン等の更新) をリアルタイム同期＆欠落補正
   useEffect(() => {
-    setGlossaryState(glossary);
+    const repaired: Glossary = {
+      terms: (glossary.terms || []).map((t: any) => ({
+        ...t,
+        reading: t.reading || t.ruby || '',
+        description: t.description || t.meaning || t.content || '',
+        ignoreInProofreading: t.ignoreInProofreading !== false,
+        updatedEpisode: t.updatedEpisode || (t.id && String(t.id).includes('init') ? '【初期プロット策定時】' : undefined),
+      })),
+      rubies: (glossary.rubies || []).map((r: any) => ({
+        ...r,
+        notation: r.notation || (r.kanji && r.ruby ? `${r.kanji}《${r.ruby}》` : r.kanji || r.ruby || ''),
+        updatedEpisode: r.updatedEpisode || (r.id && String(r.id).includes('init') ? '【初期プロット策定時】' : undefined),
+      })),
+    };
+    setGlossaryState(repaired);
   }, [glossary]);
 
   // 用語モーダル
@@ -175,7 +189,7 @@ export const GlossaryView: React.FC<GlossaryViewProps> = ({ glossary, onSave, on
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{term.description || '説明なし'}</p>
+                  <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{term.description || (term as any).meaning || (term as any).content || '説明なし'}</p>
                 </div>
 
                 <div className="flex items-center space-x-1 shrink-0">
@@ -221,7 +235,9 @@ export const GlossaryView: React.FC<GlossaryViewProps> = ({ glossary, onSave, on
               >
                 <div className="space-y-0.5">
                   <div className="flex items-center space-x-2">
-                    <span className="font-mono text-sm text-purple-300 font-bold">{ruby.notation}</span>
+                    <span className="font-mono text-sm text-purple-300 font-bold">
+                      {ruby.notation || (ruby.kanji && ruby.ruby ? `${ruby.kanji}《${ruby.ruby}》` : ruby.kanji || ruby.ruby)}
+                    </span>
                     {ruby.updatedEpisode && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-950 text-purple-300 border border-purple-800 font-mono">
                         {ruby.updatedEpisode}

@@ -543,9 +543,12 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                   // 3. 重大な設定矛盾がある場合のみ全文リライト
                   if (review.hasCriticalError) {
                     if (proofreadAttempt < MAX_PROOFREAD_RETRIES) {
+                      const isJsonDraft = NovelEngine.isJsonOutput(draftedContent);
                       setEditorLog((prev) => [
                         ...prev,
-                        `[編集者AI] 致命的な設定矛盾が検出されたため、執筆者AIに原稿の自動リライトを指示しています...`
+                        isJsonDraft
+                          ? `[編集者AI] ★ 提出原稿が小説本文ではなく設定JSON形式であるため原稿不備として却下。地の文・セリフでの新規執筆を指示中...`
+                          : `[編集者AI] 致命的な設定矛盾が検出されたため、執筆者AIに原稿の自動リライトを指示しています...`
                       ]);
                       setCurrentStatus(`執筆者AI (${aiSettings.writerModel}) が校閲指摘を反映して原稿を自動修正中...`);
                       setStreamingText('');

@@ -193,6 +193,26 @@ export class NovelEngine {
   }
 
   /**
+   * 誤ってJSON形式で出力された応答の中から、小説本文（prose/content/text等）の文字列値をレスキュー・抽出する
+   */
+  static extractProseFromAmbiguousJson(text: string): string {
+    if (!text) return '';
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === 'object' && parsed !== null) {
+        const candidate = parsed.prose || parsed.content || parsed.text || parsed.story || parsed.manuscript || parsed.scene || parsed.body;
+        if (typeof candidate === 'string' && candidate.trim().length >= 100) {
+          return candidate.trim();
+        }
+      }
+    } catch (_) {
+      const match = text.match(/"(?:prose|content|text|story|manuscript|body)"\s*:\s*"([^"]{100,})"/i);
+      if (match) return match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+    }
+    return '';
+  }
+
+  /**
    * 途切れた未完成のJSON文字列を、LIFOスタックにより直前の完結要素まで巻戻して完全修復・パースする
    */
   private static repairPartialJson(jsonStr: string): string {
@@ -968,16 +988,21 @@ ${chapterSummaries}
 
     const systemPrompt = aiSettings?.systemPrompts?.writeSceneContent || DEFAULT_SYSTEM_PROMPTS.writeSceneContent || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
 
+    // 以前の文脈にJSONが混入していないか安全クレンジング
+    const cleanPrevSummary = previousContextSummary && !NovelEngine.isJsonOutput(previousContextSummary)
+      ? previousContextSummary
+      : '';
+
     const cleanConcept = NovelEngine.sanitizePromptConcept(promptSettings.storyConcept);
     const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene.summary})
 【これまでのあらすじ・直前シーンのラスト本文】:
-${previousContextSummary || 'ここから物語が始まります。'}
+${cleanPrevSummary || 'ここから物語が始まります。'}
 
 ${this.buildBibleContext(bible, glossary)}
 
-上記を踏まえ、シーン ${sceneIndex + 1} の本文のみを即座に書き出してください。`;
+上記を踏まえ、シーン ${sceneIndex + 1} の地の文と会話文で構成された日本語小説本文のみを即座に書き出してください。`;
 
     let raw = await OllamaService.chatStream(
       baseUrl,
@@ -991,27 +1016,32 @@ ${this.buildBibleContext(bible, glossary)}
       aiSettings
     );
 
-    // JSON出力誤爆のプログラム自動判定＆クレンジング/再生成
+    // JSON出力誤爆の堅牢な検知＆リカバリ再呼び出し (最大2回)
+    let isJson = NovelEngine.isJsonOutput(raw);
+    let attempts = 0;
+    while (isJson && attempts < 2) {
+      attempts++;
+      console.warn(`[writeSceneContent] Writer AI outputted JSON (attempt ${attempts}). Retrying with strict prose system prompt...`);
+      const retrySystem = `${systemPrompt}\n\n【絶対遵守命令】JSONフォーマット、キー名（newCharacters等）、コードブロックは絶対に出力しないでください。純粋な日本語の小説本文（地の文・会話文）のみを出力してください。`;
+      raw = await OllamaService.chat(
+        baseUrl,
+        writerModel,
+        retrySystem,
+        userPrompt,
+        0.7,
+        signal,
+        false,
+        aiSettings
+      );
+      isJson = NovelEngine.isJsonOutput(raw);
+    }
+
     if (NovelEngine.isJsonOutput(raw)) {
-      console.warn('Writer AI unexpectedly outputted JSON structure instead of novel manuscript. Cleaning/retrying...');
-      const cleanedFromRaw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
-      if (cleanedFromRaw.length >= 200) {
-        raw = cleanedFromRaw;
+      const rescued = NovelEngine.extractProseFromAmbiguousJson(raw);
+      if (rescued && rescued.length >= 100) {
+        raw = rescued;
       } else {
-        const retrySystem = `${systemPrompt}\n\n【重要指示】JSON、コードブロック、または設定オブジェクトは絶対に出力しないでください。純粋な日本語の小説本文のみを出力してください。`;
-        raw = await OllamaService.chat(
-          baseUrl,
-          writerModel,
-          retrySystem,
-          userPrompt,
-          0.7,
-          signal,
-          false,
-          aiSettings
-        );
-        if (NovelEngine.isJsonOutput(raw)) {
-          raw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
-        }
+        raw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
       }
     }
 
@@ -1053,23 +1083,38 @@ ${this.buildBibleContext(bible, glossary)}
 
     const systemPrompt = aiSettings?.systemPrompts?.rewriteSceneWithFeedback || DEFAULT_SYSTEM_PROMPTS.rewriteSceneWithFeedback || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
 
+    const isOriginalDraftJson = NovelEngine.isJsonOutput(originalDraft);
+    const cleanOriginalDraft = isOriginalDraftJson
+      ? '(※前回の提出原稿は設定JSON形式の不備により破棄されました。ゼロから小説本文を書き出してください。)'
+      : originalDraft;
+
     const feedbackText = feedbackComments
-      .map((c) => `- 指摘 [${c.type}]: ${c.comment} ${c.originalText ? `(該当箇所: "${c.originalText}")` : ''}`)
+      .map((c) => {
+        const origText = c.originalText && !NovelEngine.isJsonOutput(c.originalText)
+          ? `(該当箇所: "${c.originalText.slice(0, 100)}")`
+          : '';
+        return `- 指摘 [${c.type}]: ${c.comment} ${origText}`;
+      })
       .join('\n');
+
+    const cleanPrevSummary = previousContextSummary && !NovelEngine.isJsonOutput(previousContextSummary)
+      ? previousContextSummary
+      : '';
 
     const cleanConcept = NovelEngine.sanitizePromptConcept(promptSettings.storyConcept);
     const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene?.summary || ''})
-【これまでのあらすじ・直前シーンのラスト本文】: ${previousContextSummary || 'なし'}
+【これまでのあらすじ・直前シーンのラスト本文】: ${cleanPrevSummary || 'なし'}
 
 ${this.buildBibleContext(bible, glossary)}
 
 【編集者AIからの校閲修正指示】:
 ${feedbackText}
+${isOriginalDraftJson ? '\n【絶対命令】前回の提出原稿は誤って設定JSONデータで出力されたため編集部により即座に却下されました。今回はJSON・コードブロック・設定項目は絶対に出力せず、地の文と会話文で構成された純粋な日本語の小説本文のみを即座に書き出してください。' : ''}
 
 【修正対象の初稿原稿】:
-${originalDraft}
+${cleanOriginalDraft}
 
 上記【校閲修正指示】を踏まえ、矛盾を修正した改訂原稿本文のみを即座に書き出してください。`;
 
@@ -1085,8 +1130,32 @@ ${originalDraft}
       aiSettings
     );
 
+    let isJson = NovelEngine.isJsonOutput(raw);
+    let attempts = 0;
+    while (isJson && attempts < 2) {
+      attempts++;
+      console.warn(`[rewriteSceneWithFeedback] Writer AI outputted JSON (attempt ${attempts}). Retrying with strict prose system prompt...`);
+      const retrySystem = `${systemPrompt}\n\n【絶対遵守命令】JSONフォーマット、キー名（newCharacters等）、コードブロックは絶対に出力しないでください。純粋な日本語の小説本文（地の文・会話文）のみを出力してください。`;
+      raw = await OllamaService.chat(
+        baseUrl,
+        writerModel,
+        retrySystem,
+        userPrompt,
+        0.7,
+        signal,
+        false,
+        aiSettings
+      );
+      isJson = NovelEngine.isJsonOutput(raw);
+    }
+
     if (NovelEngine.isJsonOutput(raw)) {
-      raw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
+      const rescued = NovelEngine.extractProseFromAmbiguousJson(raw);
+      if (rescued && rescued.length >= 100) {
+        raw = rescued;
+      } else {
+        raw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
+      }
     }
 
     return NovelEngine.sanitizeManuscript(raw, endingIndicator);

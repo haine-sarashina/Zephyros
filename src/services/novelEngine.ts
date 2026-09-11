@@ -64,6 +64,7 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 出来上がった原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
 
 【厳律・校閲チェックルール】
+0. **原稿形式の判定（原稿不備の絶対却下）**: もし校閲対象の原稿が日本語の小説本文（地の文やセリフ）ではなく、JSON構造や設定データ（\`newCharacters\`, \`updatedCharacters\`等）になっている場合は原稿不成立の致命的エラーです。即座に hasCriticalError: true とし、"type": "contradiction", "comment": "原稿が小説の本文ではなく設定JSONデータになっています。設定データではなく地の文と対話で構成された日本語の小説本文として執筆し直してください。" を返してください。
 1. 特殊用語辞典に登録されている造語や特殊ルビ表記は「誤字ではありません」。
 2. 設定との致命的な矛盾（一人称・性格・外見・役割等の食い違い）が存在する場合のみ hasCriticalError: true としてください。
 3. 単純な誤字脱字（typo）や語尾・表現の提案（suggestion）は hasCriticalError: false としてください。
@@ -1215,6 +1216,23 @@ ${originalDraft}
     signal?: AbortSignal,
     aiSettings?: any
   ): Promise<{ comments: ReviewComment[]; hasCriticalError: boolean }> {
+    if (NovelEngine.isJsonOutput(draftContent)) {
+      return {
+        hasCriticalError: true,
+        comments: [
+          {
+            id: `rev-json-reject-${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'contradiction',
+            originalText: draftContent.slice(0, 100),
+            suggestedText: '',
+            comment: '【編集部却下】原稿が小説の本文ではなく設定JSONデータで提出されています。設定データではなく地の文・セリフを含む日本語の小説本文として執筆し直してください。',
+            resolved: false,
+          },
+        ],
+      };
+    }
+
     const systemPrompt = aiSettings?.systemPrompts?.proofreadScene || DEFAULT_SYSTEM_PROMPTS.proofreadScene || `あなたは文芸誌のベテラン編集者（校閲エディター）です。`;
 
     const userPrompt = `【校閲対象章】: ${chapterTitle}

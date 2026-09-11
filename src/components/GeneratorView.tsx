@@ -570,7 +570,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                             return updated;
                           });
                         },
-                        currentSession.abortController.signal
+                        currentSession.abortController.signal,
+                        aiSettings
                       );
 
                       const rewriteDegen = NovelEngine.detectAndFixDegeneration(draftedContent);
@@ -635,7 +636,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                 latestBible,
                 latestGlossary,
                 episodeTag,
-                currentSession.abortController.signal
+                currentSession.abortController.signal,
+                aiSettings
               );
 
               latestBible = extractResult.updatedBible;

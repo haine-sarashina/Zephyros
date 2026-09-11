@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import { AISettings } from '../types';
+import { AISettings, SystemPrompts } from '../types';
 import { OllamaService, OllamaModelInfo } from '../services/ollamaService';
-import { Settings, RefreshCw, CheckCircle2, XCircle, Bot, ShieldCheck, Save, Check, Sparkles, ArrowUpCircle, Download } from 'lucide-react';
+import { DEFAULT_SYSTEM_PROMPTS } from '../services/novelEngine';
+import { Settings, RefreshCw, CheckCircle2, XCircle, Bot, ShieldCheck, Save, Check, Sparkles, ArrowUpCircle, Download, FileText, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface AISettingsViewProps {
   settings: AISettings;
@@ -18,6 +19,7 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [savedNotice, setSavedNotice] = useState(false);
+  const [openPromptKey, setOpenPromptKey] = useState<string | null>('writeSceneContent');
 
   // アップデート関連ステート
   const [currentVersion, setCurrentVersion] = useState<string>('');
@@ -99,6 +101,30 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
     onSave(formState);
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 2000);
+  };
+
+  const handleResetPrompts = () => {
+    if (confirm('システムプロンプトをすべて初期デフォルト状態に戻しますか？')) {
+      setFormState({
+        ...formState,
+        systemPrompts: { ...DEFAULT_SYSTEM_PROMPTS },
+      });
+    }
+  };
+
+  const getPromptValue = (key: keyof SystemPrompts): string => {
+    return formState.systemPrompts?.[key] ?? DEFAULT_SYSTEM_PROMPTS[key] ?? '';
+  };
+
+  const updatePromptValue = (key: keyof SystemPrompts, val: string) => {
+    setFormState({
+      ...formState,
+      systemPrompts: {
+        ...DEFAULT_SYSTEM_PROMPTS,
+        ...formState.systemPrompts,
+        [key]: val,
+      },
+    });
   };
 
   return (
@@ -482,6 +508,113 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
           <p className="text-[11px] text-slate-500">
             OllamaがGPUメモリ(VRAM)上にモデルを保持する時間を指定します。常駐に設定すると毎回のモデルロード待ちを排除できます。
           </p>
+        </div>
+      </div>
+
+      {/* 4. システムプロンプトの編集 (System Prompt Customization) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center space-x-2">
+            <FileText className="w-5 h-5 text-indigo-400" />
+            <div>
+              <h3 className="text-sm font-bold text-slate-100">システムプロンプトの編集 (System Prompt Customization)</h3>
+              <p className="text-[11px] text-slate-400">
+                Ollamaを呼び出す際の各種システムプロンプト（執筆ルールや出力フォーマット指示）を自由に確認・編集・微調整できます。
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleResetPrompts}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer"
+            title="デフォルトのシステムプロンプトに戻す"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>デフォルトに戻す</span>
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {[
+            {
+              key: 'generateOutlineStep1' as keyof SystemPrompts,
+              title: '1. プロット全体＆初期設定構成 (Step 1)',
+              desc: '作品タイトル・全体あらすじ・初期キャラクター・世界観・特殊用語の策定指示',
+            },
+            {
+              key: 'generateOutlineStep2' as keyof SystemPrompts,
+              title: '2. 各話プロット・シーン構成 (Step 2)',
+              desc: '第N話ごとの章タイトル・あらすじ・詳細シーン展開の策定指示 (※ {{chNum}} は話数に置換されます)',
+            },
+            {
+              key: 'writeSceneContent' as keyof SystemPrompts,
+              title: '3. 本文リアルタイム執筆 (Writer AI)',
+              desc: 'シーンごとの長編小説本文の執筆ルール・文体・ルビ・対話記法指示',
+            },
+            {
+              key: 'proofreadScene' as keyof SystemPrompts,
+              title: '4. 本文校閲 (Editor AI)',
+              desc: '誤字脱字、アルファベット混入、設定矛盾、無限ループ異常の検証チェック指示',
+            },
+            {
+              key: 'rewriteSceneWithFeedback' as keyof SystemPrompts,
+              title: '5. 原稿リライト (Writer AI)',
+              desc: '校閲指摘を受けた初稿原稿の矛盾修正・再執筆ルール指示',
+            },
+            {
+              key: 'extractSettingDelta' as keyof SystemPrompts,
+              title: '6. 設定資料自動抽出 (Setting Extractor)',
+              desc: '校閲完了後の原稿本文から新規人物・地名・品物・用語を抽出する指示',
+            },
+          ].map((item) => {
+            const isOpen = openPromptKey === item.key;
+            return (
+              <div key={item.key} className="border border-slate-800 rounded-xl bg-slate-950/50 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setOpenPromptKey(isOpen ? null : item.key)}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-800/40 text-left transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    {isOpen ? (
+                      <ChevronDown className="w-4 h-4 text-indigo-400 shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+                    )}
+                    <div>
+                      <span className="text-xs font-semibold text-slate-200">{item.title}</span>
+                      <p className="text-[11px] text-slate-500">{item.desc}</p>
+                    </div>
+                  </div>
+                  {formState.systemPrompts?.[item.key] && formState.systemPrompts[item.key] !== DEFAULT_SYSTEM_PROMPTS[item.key] && (
+                    <span className="text-[10px] bg-indigo-950 border border-indigo-700 text-indigo-300 px-2 py-0.5 rounded-md font-mono shrink-0">
+                      カスタム適用中
+                    </span>
+                  )}
+                </button>
+
+                {isOpen && (
+                  <div className="p-4 border-t border-slate-800/80 bg-slate-950 space-y-2">
+                    <textarea
+                      rows={10}
+                      value={getPromptValue(item.key)}
+                      onChange={(e) => updatePromptValue(item.key, e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 leading-relaxed resize-y"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => updatePromptValue(item.key, DEFAULT_SYSTEM_PROMPTS[item.key] || '')}
+                        className="text-[11px] text-slate-400 hover:text-indigo-400 transition-colors"
+                      >
+                        このプロンプトをデフォルトに戻す
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

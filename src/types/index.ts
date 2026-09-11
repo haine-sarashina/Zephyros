@@ -76,6 +76,15 @@ export interface ThinkCommandTargets {
   proofread?: boolean; // 本文校閲 AI (編集者AI)
 }
 
+export interface SystemPrompts {
+  generateOutlineStep1?: string; // プロット全体＆初期設定構成 (Step 1)
+  generateOutlineStep2?: string; // 各話プロット・シーン構成 (Step 2)
+  writeSceneContent?: string; // 本文リアルタイム執筆 (Writer AI)
+  proofreadScene?: string; // 本文校閲 (Editor AI)
+  rewriteSceneWithFeedback?: string; // 原稿リライト (Writer AI)
+  extractSettingDelta?: string; // 設定資料自動抽出 (Setting Extractor)
+}
+
 export interface AISettings {
   ollamaUrl: string; // デフォルト: http://localhost:11434
   writerModel: string; // 執筆者モデル (例: qwen2.5:32b, qwen3.8:27b)
@@ -85,6 +94,7 @@ export interface AISettings {
   thinkMode?: 'nothink' | 'think' | 'none'; // レガシー互換
   keepAlive?: string; // ローカルAI常駐設定 ('-1', '5m', '10m', '30m', '60m', '0')
   thinkCommandTargets?: ThinkCommandTargets; // 各AI呼び出し項目ごとの思考抑止(/nothink)チェックボックス設定
+  systemPrompts?: SystemPrompts; // カスタムシステムプロンプト設定
 }
 
 export interface ReviewComment {

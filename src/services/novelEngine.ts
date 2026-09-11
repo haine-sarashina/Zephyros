@@ -1,7 +1,149 @@
 // 小説自動生成 ＆ マルチエージェント協調エンジン (設定・用語自動抽出・履歴管理機能付き)
 
-import { PromptSettings, SettingBible, Glossary, Chapter, ReviewComment, ExtractedSettingDelta, CharacterSetting, WorldSetting, LocationSetting, GlossaryTerm, RubySetting, NovelData } from '../types';
+import { PromptSettings, SettingBible, Glossary, Chapter, ReviewComment, ExtractedSettingDelta, CharacterSetting, WorldSetting, LocationSetting, GlossaryTerm, RubySetting, NovelData, SystemPrompts } from '../types';
 import { OllamaService } from './ollamaService';
+
+export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
+  generateOutlineStep1: `あなたはプロの長編小説構成作家・ストーリーディレクターです。
+ユーザーの設定プロンプトに基づき、長編小説のタイトル・作品概要・【主要登場人物】【世界観設定】【地名・地理】【初期特殊用語】のみを策定してください。
+
+必ず以下のJSON形式のみを出力してください：
+{
+  "title": "作品タイトル",
+  "subtitle": "サブタイトル・キャッチコピー",
+  "synopsis": "全体あらすじ（300〜500字程度）",
+  "characters": [
+    { "name": "名前", "ruby": "ふりがな", "role": "主人公/ヒロイン等", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格", "background": "背景" }
+  ],
+  "worldBuilding": [
+    { "title": "設定名", "category": "culture", "content": "詳細解説" }
+  ],
+  "geography": [
+    { "name": "地名・施設名", "description": "概要" }
+  ],
+  "terms": [
+    { "term": "用語名", "reading": "よみがな（ひらがな）", "description": "用語の意味・背景・詳細解説" }
+  ],
+  "rubies": [
+    { "kanji": "対象漢字", "ruby": "ルビ/読み（ひらがな）" }
+  ]
+}`,
+
+  generateOutlineStep2: `あなたはプロの長編小説構成作家です。
+第{{chNum}}話の【章タイトル】【話のあらすじ】【2〜4つの詳細シーン構成】を作成してください。
+
+必ず以下のJSON形式のみを出力してください：
+{
+  "title": "第{{chNum}}話の章タイトル",
+  "synopsis": "第{{chNum}}話のあらすじ（150〜300字）",
+  "scenes": [
+    { "title": "シーン1", "summary": "シーン1のテーマ・展開・情景・登場人物" },
+    { "title": "シーン2", "summary": "シーン2のテーマ・展開・情景・登場人物" }
+  ]
+}`,
+
+  writeSceneContent: `あなたは長編小説のプロ執筆者（ライターAI）です。
+情景描写、感情描写、登場人物の対話を用いて、物語の本文を執筆してください。
+
+【執筆・文章ルール（厳格順守）】
+1. 1つのシーンにつき 1,500字〜2,500字程度の描写を書き上げ、途中で切れずにシーンとしてきれいに完結させてください。
+2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
+3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
+4. **前後関係の接続と整合性**: 提供された「直前シーンのラスト本文」および状況を引き継ぎ、登場人物の行動・位置関係や時間の流れが自然につながるように記述してください。不自然な場面飛躍や設定矛盾を防止してください。
+5. 設定資料集に登録されている口調・一人称・二人称・人間関係を厳格に守ってください。
+6. 特殊用語辞典に登録されている造語やルビ表記（例: 異世界《いせかい》）を積極的に活用してください。
+7. 地名や作品固有コード等を除き、本文内に不必要な英単語（例: oversized）をそのまま使用せず、必ずカタカナ（例: オーバーサイズ）で記述してください。
+8. **ルビのルール（厳格順守）**:
+   - ひらがなやカタカナ表記の単語にはルビを付けないでください（例: 『パン』『あした』等にルビは不要です）。
+   - ルビは人名・地名等の固有名詞の漢字部分、または『強敵《とも》』『宇宙《そら》』などの特殊な読みを行う漢字にのみ付与してください。
+   - ルビは『ひらがな』だけでなく、『火球魔法《ファイアーボール》』『聖剣《エクスカリバー》』のようにカタカナのルビも使用可能です。
+   - ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。
+9. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。純粋な日本語の小説本文のみを出力してください。`,
+
+  proofreadScene: `あなたは文芸誌のベテラン編集者（校閲エディター）です。
+出来上がった原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
+
+【厳律・校閲チェックルール】
+1. 特殊用語辞典に登録されている造語や特殊ルビ表記は「誤字ではありません」。
+2. 設定との致命的な矛盾（一人称・性格・外見・役割等の食い違い）が存在する場合のみ hasCriticalError: true としてください。
+3. 単純な誤字脱字（typo）や語尾・表現の提案（suggestion）は hasCriticalError: false としてください。
+4. **英単語・アルファベット混入のチェック**: 地名や作品固有コード等を除き、日本語の本文内に不用意に残っている英単語（例: "oversized" → "オーバーサイズ"、"casual" → "カジュアル" など）は typo として指摘し、必ず "originalText" ('oversized') と "suggestedText" ('オーバーサイズ') を指定してください。
+5. **ルビ表記・記号崩れのチェック**: 《 の閉じ忘れ（例: "夕暮れ《ゆうぐれ" → "夕暮れ《ゆうぐれ》"）やルビの脱落・カッコ崩れは typo として指摘し、必ず "originalText" と "suggestedText" を指定してください。
+6. **台詞末尾の句点（。）および文末切れのチェック**: 台詞の末尾に「。」が含まれる場合（例: 『「〜〜。」』）や、文章の最後が句点・終止記号なく途切れている場合は typo（表記崩れ）として指摘し、"originalText" と "suggestedText" を指定してください。
+7. **文章崩れ・フレーズ連続反復・読点異常のチェック**: 同一文節の無限繰り返しや読点（、）の過剰多用が含まれる場合は即座に hasCriticalError: true とし、"type": "contradiction", "comment": "文章の同一フレーズ無限ループまたは読点過剰崩れを検出" と指定してください。
+8. typo（誤字脱字・表記崩れ）を指摘する場合は、必ず "originalText" (誤りの原文) と "suggestedText" (正解・置換後のテキスト) の両方を正確に指定してください。
+9. 本文の再生成は行わず、指示通りのJSONフォーマットのみを返してください。
+
+必ず以下のJSON形式でのみ出力してください：
+
+{
+  "hasCriticalError": false,
+  "comments": [
+    {
+      "type": "contradiction" または "typo" または "suggestion",
+      "originalText": "対象箇所の原文",
+      "suggestedText": "修正後の正しいテキスト（typoの場合必須）",
+      "comment": "指摘理由"
+    }
+  ]
+}`,
+
+  rewriteSceneWithFeedback: `あなたは長編小説のプロ執筆者（ライターAI）です。
+編集者AIから提出された校閲指摘（矛盾点や誤字脱字）を修正し、完成度の高い修正稿を執筆してください。
+
+【修正・文章ルール】
+1. 指摘された矛盾点や表現の不整合を確実に修正してください。
+2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
+3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
+4. 前のシーン・前話との状況・時間のつながりに不自然な飛躍がないよう自然に接続してください。
+5. **ルビのルール**: ひらがな・カタカナ単語にルビを付けず、固有名詞や『強敵《とも》』『火球魔法《ファイアーボール》』のように漢字部分にのみ付与してください。
+6. 本文中に不用意な英単語（例: oversized）が含まれている場合はカタカナ表記に修正してください。
+7. ルビ表記（《ルビ》）の閉じ忘れや形式不備がある場合は修復してください。
+8. 修正箇所以外の優れた情景描写、感情描写、文体や対話のテンポは保持してください。
+9. 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な修正本文のみを出力してください。`,
+
+  extractSettingDelta: `あなたは小説の設定・用語抽出エージェントです。
+渡された小説の原稿本文から、登場する「人物」「品物・アイテム」「地名・場所」「固有用語」「ルビ」を抽出し、現在の設定資料集と比較して新規追加要素または設定の変化・追記情報を判断してください。
+
+【厳格な抽出禁止ルール（絶対厳守）】
+1. セリフの一節、日常会話のフレーズ、文章の断片（例: 「～は休養中」「～で伝える」「～残ってる」等）は【絶対抽出禁止】です。
+2. 「1 の 1」「第X章」「◯の部屋」「〜の比喩」などの数値、章節の見出し記号、文章の文脈比喩表現は【絶対抽出禁止】です。
+3. 明確な名詞句・固有の固有名詞（例: 「アルド」「静寂の石室」「魔導調理器具」「ペペロンチーノ」など）のみを厳格に抽出してください。
+4. "category" は項目に応じて厳格に分類してください:
+   - "culture": 品物・道具・料理・武器・防具・文化
+   - "magic": 魔法・スキル・能力・呪文・結界
+   - "dungeon": ダンジョン階層・部屋・罠・セーフゾーン
+   - "system": 社会制度・ギルド・通貨・階級・国家
+
+必ず以下のJSON形式でのみ出力してください：
+
+{
+  "newCharacters": [
+    { "name": "キャラクターの本名（「（主人公）」等の注釈カッコ不可）", "ruby": "ふりがな（ひらがな）", "role": "役割・職業", "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」）", "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」）", "appearance": "外見", "personality": "性格", "background": "背景", "illustrationPrompt": "画像生成AI用の英語タグ（例: 1girl, silver hair, anime style）" }
+  ],
+  "updatedCharacters": [
+    { "name": "既存キャラ名", "updateNote": "新しく判明した事実や変化の説明" }
+  ],
+  "newWorldItems": [
+    { "title": "品物・料理・道具名", "category": "culture", "content": "説明" }
+  ],
+  "updatedWorldItems": [
+    { "title": "既存品物名", "updateNote": "追加説明や新情報" }
+  ],
+  "newLocations": [
+    { "name": "場所名", "description": "説明" }
+  ],
+  "updatedLocations": [
+    { "name": "既存場所名", "updateNote": "追加説明" }
+  ],
+  "newTerms": [
+    { "term": "固有名詞・造語", "reading": "読み", "description": "説明" }
+  ],
+  "newRubies": [
+    { "kanji": "漢字", "ruby": "ルビ" }
+  ]
+}`
+};
 
 export class NovelEngine {
   /**
@@ -35,6 +177,18 @@ export class NovelEngine {
     });
 
     return context;
+  }
+
+  /**
+   * LLMの出力結果が小説本文ではなくJSONオブジェクトであるか判定する
+   */
+  static isJsonOutput(text: string): boolean {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('```json')) return true;
+    if (/^[\s\r\n]*\{\s*"(?:newCharacters|updatedCharacters|newWorldItems|updatedWorldItems|title|chapters)"/i.test(trimmed)) return true;
+    if (/"newCharacters"\s*:|"updatedCharacters"\s*:|"newWorldItems"\s*:/i.test(trimmed)) return true;
+    return false;
   }
 
   /**
@@ -429,30 +583,7 @@ ${JSON.stringify(draftData, null, 2)}
     // --- STEP 1: あらすじ・登場人物・世界観・用語集の基本枠生成 (高速 Call 1) ---
     if (onProgress) onProgress('プロット準備中 (コア構想・キャラクター・世界観設定を構築中)...');
 
-    const step1System = `あなたはプロの長編小説構成作家・ストーリーディレクターです。
-ユーザーの設定プロンプトに基づき、長編小説のタイトル・作品概要・【主要登場人物】【世界観設定】【地名・地理】【初期特殊用語】のみを策定してください。
-
-必ず以下のJSON形式のみを出力してください：
-{
-  "title": "作品タイトル",
-  "subtitle": "サブタイトル・キャッチコピー",
-  "synopsis": "全体あらすじ（300〜500字程度）",
-  "characters": [
-    { "name": "名前", "ruby": "ふりがな", "role": "主人公/ヒロイン等", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格", "background": "背景" }
-  ],
-  "worldBuilding": [
-    { "title": "設定名", "category": "culture", "content": "詳細解説" }
-  ],
-  "geography": [
-    { "name": "地名・施設名", "description": "概要" }
-  ],
-  "terms": [
-    { "term": "用語名", "reading": "よみがな（ひらがな）", "description": "用語の意味・背景・詳細解説" }
-  ],
-  "rubies": [
-    { "kanji": "対象漢字", "ruby": "ルビ/読み（ひらがな）" }
-  ]
-}`;
+    const step1System = aiSettings?.systemPrompts?.generateOutlineStep1 || DEFAULT_SYSTEM_PROMPTS.generateOutlineStep1 || `あなたはプロの長編小説構成作家・ストーリーディレクターです。`;
 
     const step1User = `【お題タグ】: ${promptSettings.themes.join(', ')}
 【ストーリーコンセプト】: ${promptSettings.storyConcept}
@@ -569,18 +700,8 @@ ${this.buildBibleContext(bible, glossary)}
 
       const prevChapterTitles = chapters.map((c) => `第${c.id}話: ${c.title} (${c.synopsis})`).join('\n');
 
-      const step2System = `あなたはプロの長編小説構成作家です。
-第${chNum}話の【章タイトル】【話のあらすじ】【2〜4つの詳細シーン構成】を作成してください。
-
-必ず以下のJSON形式のみを出力してください：
-{
-  "title": "第${chNum}話の章タイトル",
-  "synopsis": "第${chNum}話のあらすじ（150〜300字）",
-  "scenes": [
-    { "title": "シーン1", "summary": "シーン1のテーマ・展開・情景・登場人物" },
-    { "title": "シーン2", "summary": "シーン2のテーマ・展開・情景・登場人物" }
-  ]
-}`;
+      const rawStep2System = aiSettings?.systemPrompts?.generateOutlineStep2 || DEFAULT_SYSTEM_PROMPTS.generateOutlineStep2 || `あなたはプロの長編小説構成作家です。`;
+      const step2System = rawStep2System.replace(/\{\{chNum\}\}/g, String(chNum));
 
       const step2User = `【作品タイトル】: ${step1Parsed.title || promptSettings.themes.join('×')}
 【全体あらすじ】: ${step1Parsed.synopsis || promptSettings.storyConcept}
@@ -844,23 +965,7 @@ ${chapterSummaries}
       endingIndicator = `（全${totalChapters}話・完）`;
     }
 
-    const systemPrompt = `あなたは長編小説のプロ執筆者（ライターAI）です。
-情景描写、感情描写、登場人物の対話を用いて、物語の本文を執筆してください。
-
-【執筆・文章ルール（厳格順守）】
-1. 1つのシーンにつき 1,500字〜2,500字程度の描写を書き上げ、途中で切れずにシーンとしてきれいに完結させてください。
-2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
-3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
-4. **前後関係の接続と整合性**: 提供された「直前シーンのラスト本文」および状況を引き継ぎ、登場人物の行動・位置関係や時間の流れが自然につながるように記述してください。不自然な場面飛躍や設定矛盾を防止してください。
-5. 設定資料集に登録されている口調・一人称・二人称・人間関係を厳格に守ってください。
-6. 特殊用語辞典に登録されている造語やルビ表記（例: 異世界《いせかい》）を積極的に活用してください。
-7. 地名や作品固有コード等を除き、本文内に不必要な英単語（例: oversized）をそのまま使用せず、必ずカタカナ（例: オーバーサイズ）で記述してください。
-8. **ルビのルール（厳格順守）**:
-   - ひらがなやカタカナ表記の単語にはルビを付けないでください（例: 『パン』『あした』等にルビは不要です）。
-   - ルビは人名・地名等の固有名詞の漢字部分、または『強敵《とも》』『宇宙《そら》』などの特殊な読みを行う漢字にのみ付与してください。
-   - ルビは『ひらがな』だけでなく、『火球魔法《ファイアーボール》』『聖剣《エクスカリバー》』のようにカタカナのルビも使用可能です。
-   - ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。
-9. 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な小説本文のみを出力してください。`;
+    const systemPrompt = aiSettings?.systemPrompts?.writeSceneContent || DEFAULT_SYSTEM_PROMPTS.writeSceneContent || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
 
     const cleanConcept = NovelEngine.sanitizePromptConcept(promptSettings.storyConcept);
     const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
@@ -873,7 +978,7 @@ ${this.buildBibleContext(bible, glossary)}
 
 上記を踏まえ、シーン ${sceneIndex + 1} の本文のみを即座に書き出してください。`;
 
-    const raw = await OllamaService.chatStream(
+    let raw = await OllamaService.chatStream(
       baseUrl,
       writerModel,
       systemPrompt,
@@ -884,6 +989,31 @@ ${this.buildBibleContext(bible, glossary)}
       false,
       aiSettings
     );
+
+    // JSON出力誤爆のプログラム自動判定＆クレンジング/再生成
+    if (NovelEngine.isJsonOutput(raw)) {
+      console.warn('Writer AI unexpectedly outputted JSON structure instead of novel manuscript. Cleaning/retrying...');
+      const cleanedFromRaw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
+      if (cleanedFromRaw.length >= 200) {
+        raw = cleanedFromRaw;
+      } else {
+        const retrySystem = `${systemPrompt}\n\n【重要指示】JSON、コードブロック、または設定オブジェクトは絶対に出力しないでください。純粋な日本語の小説本文のみを出力してください。`;
+        raw = await OllamaService.chat(
+          baseUrl,
+          writerModel,
+          retrySystem,
+          userPrompt,
+          0.7,
+          signal,
+          false,
+          aiSettings
+        );
+        if (NovelEngine.isJsonOutput(raw)) {
+          raw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
+        }
+      }
+    }
+
     return NovelEngine.sanitizeManuscript(raw, endingIndicator);
   }
 
@@ -902,7 +1032,8 @@ ${this.buildBibleContext(bible, glossary)}
     originalDraft: string,
     feedbackComments: ReviewComment[],
     onChunk: (text: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    aiSettings?: any
   ): Promise<string> {
     const scene = chapter.scenes[sceneIndex];
     const totalScenes = chapter.scenes.length;
@@ -919,19 +1050,7 @@ ${this.buildBibleContext(bible, glossary)}
       endingIndicator = `（全${totalChapters}話・完）`;
     }
 
-    const systemPrompt = `あなたは長編小説のプロ執筆者（ライターAI）です。
-編集者AIから提出された校閲指摘（矛盾点や誤字脱字）を修正し、完成度の高い修正稿を執筆してください。
-
-【修正・文章ルール】
-1. 指摘された矛盾点や表現の不整合を確実に修正してください。
-2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
-3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
-4. 前のシーン・前話との状況・時間のつながりに不自然な飛躍がないよう自然に接続してください。
-5. **ルビのルール**: ひらがな・カタカナ単語にルビを付けず、固有名詞や『強敵《とも》』『火球魔法《ファイアーボール》』のように漢字部分にのみ付与してください。
-6. 本文中に不用意な英単語（例: oversized）が含まれている場合はカタカナ表記に修正してください。
-7. ルビ表記（《ルビ》）の閉じ忘れや形式不備がある場合は修復してください。
-8. 修正箇所以外の優れた情景描写、感情描写、文体や対話のテンポは保持してください。
-9. 解説や挨拶、思考プロセス(<think>)は一切含めず、純粋な修正本文のみを出力してください。`;
+    const systemPrompt = aiSettings?.systemPrompts?.rewriteSceneWithFeedback || DEFAULT_SYSTEM_PROMPTS.rewriteSceneWithFeedback || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
 
     const feedbackText = feedbackComments
       .map((c) => `- 指摘 [${c.type}]: ${c.comment} ${c.originalText ? `(該当箇所: "${c.originalText}")` : ''}`)
@@ -953,15 +1072,22 @@ ${originalDraft}
 
 上記【校閲修正指示】を踏まえ、矛盾を修正した改訂原稿本文のみを即座に書き出してください。`;
 
-    const raw = await OllamaService.chatStream(
+    let raw = await OllamaService.chatStream(
       baseUrl,
       writerModel,
       systemPrompt,
       userPrompt,
       onChunk,
       0.7,
-      signal
+      signal,
+      false,
+      aiSettings
     );
+
+    if (NovelEngine.isJsonOutput(raw)) {
+      raw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
+    }
+
     return NovelEngine.sanitizeManuscript(raw, endingIndicator);
   }
 
@@ -1089,33 +1215,7 @@ ${originalDraft}
     signal?: AbortSignal,
     aiSettings?: any
   ): Promise<{ comments: ReviewComment[]; hasCriticalError: boolean }> {
-    const systemPrompt = `あなたは文芸誌のベテラン編集者（校閲エディター）です。
-出来上がった原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
-
-【厳律・校閲チェックルール】
-1. 特殊用語辞典に登録されている造語や特殊ルビ表記は「誤字ではありません」。
-2. 設定との致命的な矛盾（一人称・性格・外見・役割等の食い違い）が存在する場合のみ hasCriticalError: true としてください。
-3. 単純な誤字脱字（typo）や語尾・表現の提案（suggestion）は hasCriticalError: false としてください。
-4. **英単語・アルファベット混入のチェック**: 地名や作品固有コード等を除き、日本語の本文内に不用意に残っている英単語（例: "oversized" → "オーバーサイズ"、"casual" → "カジュアル" など）は typo として指摘し、必ず "originalText" ('oversized') と "suggestedText" ('オーバーサイズ') を指定してください。
-5. **ルビ表記・記号崩れのチェック**: 《 の閉じ忘れ（例: "夕暮れ《ゆうぐれ" → "夕暮れ《ゆうぐれ》"）やルビの脱落・カッコ崩れは typo として指摘し、必ず "originalText" と "suggestedText" を指定してください。
-6. **台詞末尾の句点（。）および文末切れのチェック**: 台詞の末尾に「。」が含まれる場合（例: 『「〜〜。」』）や、文章の最後が句点・終止記号なく途切れている場合は typo（表記崩れ）として指摘し、"originalText" と "suggestedText" を指定してください。
-7. **文章崩れ・フレーズ連続反復・読点異常のチェック**: 同一文節の無限繰り返しや読点（、）の過剰多用が含まれる場合は即座に hasCriticalError: true とし、"type": "contradiction", "comment": "文章の同一フレーズ無限ループまたは読点過剰崩れを検出" と指定してください。
-8. typo（誤字脱字・表記崩れ）を指摘する場合は、必ず "originalText" (誤りの原文) と "suggestedText" (正解・置換後のテキスト) の両方を正確に指定してください。
-9. 本文の再生成は行わず、指示通りのJSONフォーマットのみを返してください。
-
-必ず以下のJSON形式でのみ出力してください：
-
-{
-  "hasCriticalError": false,
-  "comments": [
-    {
-      "type": "contradiction" または "typo" または "suggestion",
-      "originalText": "対象箇所の原文",
-      "suggestedText": "修正後の正しいテキスト（typoの場合必須）",
-      "comment": "指摘理由"
-    }
-  ]
-}`;
+    const systemPrompt = aiSettings?.systemPrompts?.proofreadScene || DEFAULT_SYSTEM_PROMPTS.proofreadScene || `あなたは文芸誌のベテラン編集者（校閲エディター）です。`;
 
     const userPrompt = `【校閲対象章】: ${chapterTitle}
 【直前までのあらすじ】: ${previousContextSummary}
@@ -1165,49 +1265,10 @@ ${draftContent.slice(0, 12000)}
     currentBible: SettingBible,
     currentGlossary: Glossary,
     episodeTag: string, // 例: "【第3話登場時】"
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    aiSettings?: any
   ): Promise<{ updatedBible: SettingBible; updatedGlossary: Glossary; updateLogs: string[] }> {
-    const systemPrompt = `あなたは小説の設定・用語抽出エージェントです。
-渡された小説の原稿本文から、登場する「人物」「品物・アイテム」「地名・場所」「固有用語」「ルビ」を抽出し、現在の設定資料集と比較して新規追加要素または設定の変化・追記情報を判断してください。
-
-【厳格な抽出禁止ルール（絶対厳守）】
-1. セリフの一節、日常会話のフレーズ、文章の断片（例: 「～は休養中」「～で伝える」「～残ってる」等）は【絶対抽出禁止】です。
-2. 「1 の 1」「第X章」「◯の部屋」「〜の比喩」などの数値、章節の見出し記号、文章の文脈比喩表現は【絶対抽出禁止】です。
-3. 明確な名詞句・固有の固有名詞（例: 「アルド」「静寂の石室」「魔導調理器具」「ペペロンチーノ」など）のみを厳格に抽出してください。
-4. "category" は項目に応じて厳格に分類してください:
-   - "culture": 品物・道具・料理・武器・防具・文化
-   - "magic": 魔法・スキル・能力・呪文・結界
-   - "dungeon": ダンジョン階層・部屋・罠・セーフゾーン
-   - "system": 社会制度・ギルド・通貨・階級・国家
-
-必ず以下のJSON形式でのみ出力してください：
-
-{
-  "newCharacters": [
-    { "name": "キャラクターの本名（「（主人公）」等の注釈カッコ不可）", "ruby": "ふりがな（ひらがな）", "role": "役割・職業", "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」）", "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」）", "appearance": "外見", "personality": "性格", "background": "背景", "illustrationPrompt": "画像生成AI用の英語タグ（例: 1girl, silver hair, anime style）" }
-  ],
-  "updatedCharacters": [
-    { "name": "既存キャラ名", "updateNote": "新しく判明した事実や変化の説明" }
-  ],
-  "newWorldItems": [
-    { "title": "品物・料理・道具名", "category": "culture", "content": "説明" }
-  ],
-  "updatedWorldItems": [
-    { "title": "既存品物名", "updateNote": "追加説明や新情報" }
-  ],
-  "newLocations": [
-    { "name": "場所名", "description": "説明" }
-  ],
-  "updatedLocations": [
-    { "name": "既存場所名", "updateNote": "追加説明" }
-  ],
-  "newTerms": [
-    { "term": "固有名詞・造語", "reading": "読み", "description": "説明" }
-  ],
-  "newRubies": [
-    { "kanji": "漢字", "ruby": "ルビ" }
-  ]
-}`;
+    const systemPrompt = aiSettings?.systemPrompts?.extractSettingDelta || DEFAULT_SYSTEM_PROMPTS.extractSettingDelta || `あなたは小説の設定・用語抽出エージェントです。`;
 
     const userPrompt = `【現在の設定資料集の登録済み名前】:
 - 人物: ${currentBible.characters.map(c => c.name).join(', ') || 'なし'}
@@ -1225,7 +1286,7 @@ ${draftContent.slice(0, 10000)}
     const updatedGlossary: Glossary = JSON.parse(JSON.stringify(currentGlossary));
 
     try {
-      const rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.2, signal, true);
+      const rawResponse = await OllamaService.chat(baseUrl, editorModel, systemPrompt, userPrompt, 0.2, signal, true, aiSettings);
       const rawDelta: any = this.cleanAndParseJson(rawResponse);
 
       // LLMによるキー命名の揺らぎを吸収・正規化 (日本語キー含む)

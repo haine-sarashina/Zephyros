@@ -30,7 +30,7 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 }`,
 
   generateOutlineStep2: `あなたはプロの長編小説構成作家です。
-第{{chNum}}話の【章タイトル】【話のあらすじ】【2〜4つの詳細シーン構成】を作成してください。
+第{{chNum}}話の【章タイトル】【話のあらすじ】【3〜5つの詳細シーン構成（シーン1, シーン2, シーン3, シーン4...）】を作成してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -38,7 +38,9 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
   "synopsis": "第{{chNum}}話のあらすじ（150〜300字）",
   "scenes": [
     { "title": "シーン1", "summary": "シーン1のテーマ・展開・情景・登場人物" },
-    { "title": "シーン2", "summary": "シーン2のテーマ・展開・情景・登場人物" }
+    { "title": "シーン2", "summary": "シーン2のテーマ・展開・情景・登場人物" },
+    { "title": "シーン3", "summary": "シーン3のテーマ・展開・情景・登場人物" },
+    { "title": "シーン4", "summary": "シーン4のテーマ・展開・情景・登場人物" }
   ]
 }`,
 
@@ -46,7 +48,7 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 情景描写、感情描写、登場人物の対話を用いて、物語の本文を執筆してください。
 
 【執筆・文章ルール（厳格順守）】
-1. 1つのシーンにつき 1,500字〜2,500字程度の描写を書き上げ、途中で切れずにシーンとしてきれいに完結させてください。
+1. 1つのシーンにつき **2,000字〜3,000字程度** の重厚で豊かな描写を書き上げ、途中で切れずにシーンとしてきれいに完結させてください。登場人物の心情・会話・情景描写・五感表現を詳細に深掘りし、短すぎる簡易ダイジェストは禁止します。
 2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
 3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
 4. **前後関係の接続と整合性**: 提供された「直前シーンのラスト本文」および状況を引き継ぎ、登場人物の行動・位置関係や時間の流れが自然につながるように記述してください。不自然な場面飛躍や設定矛盾を防止してください。
@@ -93,7 +95,7 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 編集者AIから提出された校閲指摘（矛盾点や誤字脱字）を修正し、完成度の高い修正稿を執筆してください。
 
 【修正・文章ルール】
-1. 指摘された矛盾点や表現の不整合を確実に修正してください。
+1. 指摘された矛盾点や表現の不整合を確実に修正し、1つのシーンにつき **2,000字〜3,000字程度** の十分なボリュームを持つ修正稿を執筆してください。
 2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
 3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
 4. 前のシーン・前話との状況・時間のつながりに不自然な飛躍がないよう自然に接続してください。
@@ -719,19 +721,26 @@ ${this.buildBibleContext(bible, glossary)}
         onProgress(`全プロット構成中 (第 ${chNum} / ${targetChapterCount} 話の章題・シーン展開を作成中)...`);
       }
 
-      const prevChapterTitles = chapters.map((c) => `第${c.id}話: ${c.title} (${c.synopsis})`).join('\n');
+      const targetTotalWords = promptSettings.targetWordCount || 100000;
+      const targetWordsPerChapter = Math.round(targetTotalWords / targetChapterCount);
+      const recommendedScenesCount = targetWordsPerChapter >= 5000 ? 4 : targetWordsPerChapter >= 3000 ? 3 : 2;
 
       const rawStep2System = aiSettings?.systemPrompts?.generateOutlineStep2 || DEFAULT_SYSTEM_PROMPTS.generateOutlineStep2 || `あなたはプロの長編小説構成作家です。`;
       const step2System = rawStep2System.replace(/\{\{chNum\}\}/g, String(chNum));
 
+      const prevChapterTitles = chapters.map((c) => `第${c.id}話: ${c.title} (${c.synopsis})`).join('\n');
+
       const step2User = `【作品タイトル】: ${step1Parsed.title || promptSettings.themes.join('×')}
 【全体あらすじ】: ${step1Parsed.synopsis || promptSettings.storyConcept}
+【目標文字数】: 第${chNum}話で約 ${targetWordsPerChapter} 字 (作品全体で ${targetTotalWords} 字 / 全 ${targetChapterCount} 話)
+【推奨シーン数】: 目標文字数を達成するため、必ず ${recommendedScenesCount}〜5 つの詳細シーン構成（シーン1, シーン2, シーン3, シーン4...）を作成してください。
+
 【既存の全話展開】:
 ${prevChapterTitles || 'ここから物語が始まります。'}
 
 【作成対象】: 第${chNum}話（全${targetChapterCount}話中）
 
-上記を踏まえ、第${chNum}話の章タイトル・あらすじ・シーン構成案を作成してください。`;
+上記を踏まえ、第${chNum}話の章タイトル・あらすじ・ ${recommendedScenesCount}〜5 つのシーン構成案を作成してください。`;
 
       let step2Raw = '';
       try {
@@ -748,19 +757,24 @@ ${prevChapterTitles || 'ここから物語が始まります。'}
         step2Parsed = {
           title: `第${chNum}話`,
           synopsis: `第${chNum}話の展開`,
-          scenes: [
-            { title: '前半', summary: `第${chNum}話 前半展開` },
-            { title: '後半', summary: `第${chNum}話 後半展開` },
-          ],
+          scenes: [],
         };
       }
 
       const rawScenes = Array.isArray(step2Parsed.scenes) && step2Parsed.scenes.length > 0
         ? step2Parsed.scenes
-        : [
-            { title: '前半', summary: `第${chNum}話 前半展開` },
-            { title: '後半', summary: `第${chNum}話 後半展開` },
-          ];
+        : [];
+
+      // 目標文字数に必要なシーン数（推奨シーン数）に満たない場合は自動拡張・深掘り補填
+      if (rawScenes.length < recommendedScenesCount) {
+        const initialLen = rawScenes.length;
+        for (let sIdx = initialLen; sIdx < recommendedScenesCount; sIdx++) {
+          rawScenes.push({
+            title: `シーン${sIdx + 1}`,
+            summary: `第${chNum}話 の展開パート${sIdx + 1} (登場人物の葛藤・会話・状況の大きな展開と情景描写)`,
+          });
+        }
+      }
 
       const chapterScenes = rawScenes.map((sc: any, sIdx: number) => ({
         id: sIdx + 1,
@@ -986,6 +1000,11 @@ ${chapterSummaries}
       endingIndicator = `（全${totalChapters}話・完）`;
     }
 
+    const targetTotalWords = promptSettings.targetWordCount || 100000;
+    const targetWordsPerChapter = Math.round(targetTotalWords / totalChapters);
+    const scenesCount = chapter.scenes.length || 3;
+    const targetWordsPerScene = Math.max(1800, Math.round(targetWordsPerChapter / scenesCount));
+
     const systemPrompt = aiSettings?.systemPrompts?.writeSceneContent || DEFAULT_SYSTEM_PROMPTS.writeSceneContent || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
 
     // 以前の文脈にJSONが混入していないか安全クレンジング
@@ -997,12 +1016,13 @@ ${chapterSummaries}
     const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene.summary})
+【文字数指定（厳律順守）】: **本シーンで ${targetWordsPerScene} 字以上** (話目標: 約 ${targetWordsPerChapter} 字 / 作品全体: ${targetTotalWords} 字)
 【これまでのあらすじ・直前シーンのラスト本文】:
 ${cleanPrevSummary || 'ここから物語が始まります。'}
 
 ${this.buildBibleContext(bible, glossary)}
 
-上記を踏まえ、シーン ${sceneIndex + 1} の地の文と会話文で構成された日本語小説本文のみを即座に書き出してください。`;
+上記を踏まえ、短縮ダイジェストを避け、登場人物の心理・セリフ・情景描写を重厚に深掘りして **${targetWordsPerScene} 字以上** のシーン ${sceneIndex + 1} の日本語小説本文のみを即座に書き出してください。`;
 
     let raw = await OllamaService.chatStream(
       baseUrl,
@@ -1045,6 +1065,19 @@ ${this.buildBibleContext(bible, glossary)}
       }
     }
 
+    // 文字数が目標に対し大きく不足している場合の自動展開・加筆処理
+    if (raw.length < Math.min(1200, Math.round(targetWordsPerScene * 0.55)) && !signal?.aborted) {
+      console.warn(`[writeSceneContent] Scene content length (${raw.length} chars) is below target (${targetWordsPerScene} chars). Requesting expansion...`);
+      const expandSystem = `${systemPrompt}\n\n【文字数拡張命令】生成された本文の文字数が目標 (${targetWordsPerScene}字) に対し不足しています。情景描写・登場人物の内面心理・セリフの掛け合い・五感の表現をさらに深掘りし、目標文字数に達するよう文章を豊かに拡張・展開して完結させてください。`;
+      const expandUser = `${userPrompt}\n\n【初稿原稿 (現在 ${raw.length} 字)】:\n${raw}\n\n上記原稿をベースに描写を大幅に拡充・深掘りした重厚な完成稿を出力してください。`;
+      try {
+        const expandedRaw = await OllamaService.chat(baseUrl, writerModel, expandSystem, expandUser, 0.7, signal, false, aiSettings);
+        if (expandedRaw && expandedRaw.length > raw.length && !NovelEngine.isJsonOutput(expandedRaw)) {
+          raw = expandedRaw;
+        }
+      } catch (_) {}
+    }
+
     return NovelEngine.sanitizeManuscript(raw, endingIndicator);
   }
 
@@ -1081,6 +1114,11 @@ ${this.buildBibleContext(bible, glossary)}
       endingIndicator = `（全${totalChapters}話・完）`;
     }
 
+    const targetTotalWords = promptSettings.targetWordCount || 100000;
+    const targetWordsPerChapter = Math.round(targetTotalWords / totalChapters);
+    const scenesCount = chapter.scenes.length || 3;
+    const targetWordsPerScene = Math.max(1800, Math.round(targetWordsPerChapter / scenesCount));
+
     const systemPrompt = aiSettings?.systemPrompts?.rewriteSceneWithFeedback || DEFAULT_SYSTEM_PROMPTS.rewriteSceneWithFeedback || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
 
     const isOriginalDraftJson = NovelEngine.isJsonOutput(originalDraft);
@@ -1105,6 +1143,7 @@ ${this.buildBibleContext(bible, glossary)}
     const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
 【現在の話】: ${chapter.title} - あらすじ: ${chapter.synopsis}
 【執筆対象シーン】: シーン ${sceneIndex + 1} / 全 ${chapter.scenes.length} シーン (テーマ: ${scene?.summary || ''})
+【文字数指定（厳律順守）】: **本シーンで ${targetWordsPerScene} 字以上** (話目標: 約 ${targetWordsPerChapter} 字 / 作品全体: ${targetTotalWords} 字)
 【これまでのあらすじ・直前シーンのラスト本文】: ${cleanPrevSummary || 'なし'}
 
 ${this.buildBibleContext(bible, glossary)}
@@ -1116,7 +1155,7 @@ ${isOriginalDraftJson ? '\n【絶対命令】前回の提出原稿は誤って�
 【修正対象の初稿原稿】:
 ${cleanOriginalDraft}
 
-上記【校閲修正指示】を踏まえ、矛盾を修正した改訂原稿本文のみを即座に書き出してください。`;
+上記【校閲修正指示】を踏まえ、短縮ダイジェストを避け登場人物の対話・心理描写・情景を重厚に描き込んで、**${targetWordsPerScene} 字以上** の矛盾修正・改訂原稿本文のみを即座に書き出してください。`;
 
     let raw = await OllamaService.chatStream(
       baseUrl,

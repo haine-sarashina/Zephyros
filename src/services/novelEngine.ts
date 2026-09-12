@@ -1276,11 +1276,30 @@ ${cleanOriginalDraft}
   }
 
   /**
+   * Ollama / GGML / llama.cpp が出力する UTF-8 バイト退避文字列 (<0xXX>) の自動デコードヘルパー
+   * (例: <0xE3><0x80><0x80> -> 全角スペース '　', <0xE3><0x80><0x81> -> '、', <0xE3><0x80><0x82> -> '。')
+   */
+  static decodeUtf8HexEscapes(text: string): string {
+    if (!text) return '';
+    let decoded = text.replace(/(?:<0x[0-9a-fA-F]{2}>)+/g, (match) => {
+      try {
+        const hexMatches = match.match(/<0x([0-9a-fA-F]{2})>/g);
+        if (!hexMatches) return match;
+        const bytes = new Uint8Array(hexMatches.map((h) => parseInt(h.replace(/<0x|>/g, ''), 16)));
+        return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+      } catch (_) {
+        return match;
+      }
+    });
+    return decoded.replace(/<0xE3><0x80><0x80>/gi, '　');
+  }
+
+  /**
    * 原稿テキストの自動整律・ルビ記号の補正・句点整形ヘルパー
    */
   static sanitizeManuscript(text: string, endingIndicator?: string): string {
     if (!text) return '';
-    let sanitized = text.trim();
+    let sanitized = NovelEngine.decodeUtf8HexEscapes(text).trim();
 
     // 1. 未閉じルビ 《ルビ の自動補正 (例: 夕暮れ《ゆうぐれ -> 夕暮れ《ゆうぐれ》)
     sanitized = sanitized.replace(/(《[^》\r\n]+)(?=[。、！？\r\n\s]|$)/g, '$1》');

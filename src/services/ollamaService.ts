@@ -88,6 +88,24 @@ export class OllamaService {
   }
 
   /**
+   * UTF-8 hex escapeデコードヘルパー (<0xXX> -> 日本語文字)
+   */
+  static decodeUtf8HexEscapes(text: string): string {
+    if (!text) return '';
+    let decoded = text.replace(/(?:<0x[0-9a-fA-F]{2}>)+/g, (match) => {
+      try {
+        const hexMatches = match.match(/<0x([0-9a-fA-F]{2})>/g);
+        if (!hexMatches) return match;
+        const bytes = new Uint8Array(hexMatches.map((h) => parseInt(h.replace(/<0x|>/g, ''), 16)));
+        return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+      } catch (_) {
+        return match;
+      }
+    });
+    return decoded.replace(/<0xE3><0x80><0x80>/gi, '　');
+  }
+
+  /**
    * 単発テキスト生成 (/api/chat) (Rust プロキシ優先)
    */
   static async chat(
@@ -137,7 +155,7 @@ export class OllamaService {
           body: JSON.stringify(bodyObj)
         });
         const parsed = JSON.parse(rawRes);
-        return parsed.message?.content || '';
+        return this.decodeUtf8HexEscapes(parsed.message?.content || '');
       } catch (e: any) {
         throw new Error(typeof e === 'string' ? e : e?.message || JSON.stringify(e));
       }
@@ -158,7 +176,7 @@ export class OllamaService {
     }
 
     const data = await response.json();
-    return data.message?.content || '';
+    return this.decodeUtf8HexEscapes(data.message?.content || '');
   }
 
   /**
@@ -211,7 +229,7 @@ export class OllamaService {
       try {
         unlisten = await listen<string>(`ollama-chunk-${channelId}`, (event) => {
           if (event.payload) {
-            onChunk(event.payload);
+            onChunk(this.decodeUtf8HexEscapes(event.payload));
           }
         });
 
@@ -221,7 +239,7 @@ export class OllamaService {
           body: JSON.stringify(bodyObj)
         });
 
-        return fullText;
+        return this.decodeUtf8HexEscapes(fullText);
       } catch (e: any) {
         throw new Error(typeof e === 'string' ? e : e?.message || JSON.stringify(e));
       } finally {
@@ -268,7 +286,7 @@ export class OllamaService {
           if (parsed.message?.content) {
             const text = parsed.message.content;
             fullContent += text;
-            onChunk(text);
+            onChunk(this.decodeUtf8HexEscapes(text));
           }
         } catch {
           // 不完全行は無視
@@ -282,11 +300,11 @@ export class OllamaService {
         if (parsed.message?.content) {
           const text = parsed.message.content;
           fullContent += text;
-          onChunk(text);
+          onChunk(this.decodeUtf8HexEscapes(text));
         }
       } catch {}
     }
 
-    return fullContent;
+    return this.decodeUtf8HexEscapes(fullContent);
   }
 }

@@ -1065,17 +1065,48 @@ ${this.buildBibleContext(bible, glossary)}
       }
     }
 
-    // 文字数が目標に対し大きく不足している場合の自動展開・加筆処理
-    if (raw.length < Math.min(1200, Math.round(targetWordsPerScene * 0.55)) && !signal?.aborted) {
-      console.warn(`[writeSceneContent] Scene content length (${raw.length} chars) is below target (${targetWordsPerScene} chars). Requesting expansion...`);
-      const expandSystem = `${systemPrompt}\n\n【文字数拡張命令】生成された本文の文字数が目標 (${targetWordsPerScene}字) に対し不足しています。情景描写・登場人物の内面心理・セリフの掛け合い・五感の表現をさらに深掘りし、目標文字数に達するよう文章を豊かに拡張・展開して完結させてください。`;
-      const expandUser = `${userPrompt}\n\n【初稿原稿 (現在 ${raw.length} 字)】:\n${raw}\n\n上記原稿をベースに描写を大幅に拡充・深掘りした重厚な完成稿を出力してください。`;
+    // 目標文字数 (targetWordsPerScene) に到達するまでリアルタイム自動継続執筆を行うマルチパスルーチン (最大3パス)
+    let autoPasses = 0;
+    const maxAutoPasses = 3;
+    while (raw.length < Math.round(targetWordsPerScene * 0.9) && autoPasses < maxAutoPasses && !signal?.aborted) {
+      autoPasses++;
+      const currentLen = raw.length;
+      console.log(`[writeSceneContent] Continuation Pass ${autoPasses}: Length is ${currentLen} chars / Target ${targetWordsPerScene} chars. Auto-continuing stream...`);
+
+      const remainingWords = targetWordsPerScene - currentLen;
+      const lastContext = raw.slice(-600);
+
+      const continueSystem = `${systemPrompt}\n\n【自動継続執筆指示】あなたは小説本文を継続執筆しています。解説、挨拶、タイトル、JSON、コードブロックは絶対に出力せず、直前本文の続きからそのまま地の文と会話文で小説本文を書き出してください。`;
+      const continueUser = `【執筆対象シーン】: 第${chapter.id}話 「${chapter.title}」 - シーン ${sceneIndex + 1} / 全 ${totalScenes} シーン (テーマ: ${scene.summary})
+【直前までの執筆本文 (現在 ${currentLen} 字 / 目標 ${targetWordsPerScene} 字)】:
+... ${lastContext}
+
+【継続指示】: 上記「直前の執筆本文」の末尾から途切れることなく文章を継続し、登場人物の対話、内面葛藤、周囲の情景や五感描写を深掘りして、約 ${remainingWords} 字以上の続きの小説本文のみを即座に書き出してください。`;
+
+      onChunk('\n\n');
+      raw += '\n\n';
+
       try {
-        const expandedRaw = await OllamaService.chat(baseUrl, writerModel, expandSystem, expandUser, 0.7, signal, false, aiSettings);
-        if (expandedRaw && expandedRaw.length > raw.length && !NovelEngine.isJsonOutput(expandedRaw)) {
-          raw = expandedRaw;
-        }
-      } catch (_) {}
+        const continuedChunk = await OllamaService.chatStream(
+          baseUrl,
+          writerModel,
+          continueSystem,
+          continueUser,
+          onChunk,
+          0.75,
+          signal,
+          false,
+          aiSettings
+        );
+
+        if (!continuedChunk || NovelEngine.isJsonOutput(continuedChunk)) break;
+        const cleanedChunk = continuedChunk.replace(/^[\s\r\n]*(?:続き|【継続】|本文[：:])\s*/i, '');
+        if (cleanedChunk.trim().length < 150) break;
+        raw += cleanedChunk;
+      } catch (err) {
+        console.warn('[writeSceneContent] Continuation pass failed or aborted:', err);
+        break;
+      }
     }
 
     return NovelEngine.sanitizeManuscript(raw, endingIndicator);
@@ -1194,6 +1225,50 @@ ${cleanOriginalDraft}
         raw = rescued;
       } else {
         raw = raw.replace(/```(?:json)?[\s\S]*?```/gi, '').replace(/\{[\s\S]*\}/gi, '').trim();
+      }
+    }
+
+    // 目標文字数 (targetWordsPerScene) に到達するまでリアルタイム自動継続執筆を行うマルチパスルーチン (最大3パス)
+    let autoPasses = 0;
+    const maxAutoPasses = 3;
+    while (raw.length < Math.round(targetWordsPerScene * 0.9) && autoPasses < maxAutoPasses && !signal?.aborted) {
+      autoPasses++;
+      const currentLen = raw.length;
+      console.log(`[rewriteSceneWithFeedback] Continuation Pass ${autoPasses}: Length is ${currentLen} chars / Target ${targetWordsPerScene} chars. Auto-continuing stream...`);
+
+      const remainingWords = targetWordsPerScene - currentLen;
+      const lastContext = raw.slice(-600);
+
+      const continueSystem = `${systemPrompt}\n\n【自動継続執筆指示】あなたは小説本文を継続執筆しています。解説、挨拶、タイトル、JSON、コードブロックは絶対に出力せず、直前本文の続きからそのまま地の文と会話文で小説本文を書き出してください。`;
+      const continueUser = `【執筆対象シーン】: 第${chapter.id}話 「${chapter.title}」 - シーン ${sceneIndex + 1} / 全 ${totalScenes} シーン (テーマ: ${scene?.summary || ''})
+【直前までの執筆本文 (現在 ${currentLen} 字 / 目標 ${targetWordsPerScene} 字)】:
+... ${lastContext}
+
+【継続指示】: 上記「直前の執筆本文」の末尾から途切れることなく文章を継続し、登場人物の対話、内面葛藤、周囲の情景や五感描写を深掘りして、約 ${remainingWords} 字以上の続きの小説本文のみを即座に書き出してください。`;
+
+      onChunk('\n\n');
+      raw += '\n\n';
+
+      try {
+        const continuedChunk = await OllamaService.chatStream(
+          baseUrl,
+          writerModel,
+          continueSystem,
+          continueUser,
+          onChunk,
+          0.7,
+          signal,
+          false,
+          aiSettings
+        );
+
+        if (!continuedChunk || NovelEngine.isJsonOutput(continuedChunk)) break;
+        const cleanedChunk = continuedChunk.replace(/^[\s\r\n]*(?:続き|【継続】|本文[：:])\s*/i, '');
+        if (cleanedChunk.trim().length < 150) break;
+        raw += cleanedChunk;
+      } catch (err) {
+        console.warn('[rewriteSceneWithFeedback] Continuation pass failed or aborted:', err);
+        break;
       }
     }
 

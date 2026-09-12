@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PromptSettings, SettingBible, Glossary, AISettings, NovelData, Chapter, ReviewComment } from '../types';
 import { NovelEngine } from '../services/novelEngine';
 import { Cpu, Play, Pause, ShieldCheck, FileText, Sparkles, RefreshCw, RotateCcw } from 'lucide-react';
@@ -46,6 +46,24 @@ function getProjectSession(projectId: string): ProjectSession {
   return projectSessions[projectId];
 }
 
+// AbortSignal 連動キャンセル可能スリープ
+const delayWithSignal = (ms: number, signal?: AbortSignal): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      return reject(new DOMException('Aborted by user', 'AbortError'));
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted by user', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+};
+
 export const GeneratorView: React.FC<GeneratorViewProps> = ({
   projectId,
   promptSettings,
@@ -82,6 +100,41 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
   const [editorLog, setEditorLogState] = useState<string[]>(initialLogs);
 
   const streamingEndRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<number | null>(null);
+  const chunkBufferRef = useRef<string>('');
+  const rafIdRef = useRef<number | null>(null);
+
+  // ストリーミングテキスト更新時の軽量オートスクロール (behavior: 'auto' ＆ 100msスロットル処理でUI応答フリーズを完全防止)
+  useEffect(() => {
+    if (!streamingText || !streamingEndRef.current) return;
+    if (scrollTimeoutRef.current !== null) return;
+
+    scrollTimeoutRef.current = window.setTimeout(() => {
+      if (streamingEndRef.current) {
+        streamingEndRef.current.scrollIntoView({ behavior: 'auto' });
+      }
+      scrollTimeoutRef.current = null;
+    }, 100);
+  }, [streamingText]);
+
+  // ストリーミングチャンクの requestAnimationFrame による 60FPS バッチ更新
+  const handleStreamChunk = useCallback((chunk: string) => {
+    chunkBufferRef.current += chunk;
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        const textToAdd = chunkBufferRef.current;
+        chunkBufferRef.current = '';
+        rafIdRef.current = null;
+        if (textToAdd) {
+          setStreamingTextState((prev) => {
+            const next = prev + textToAdd;
+            currentSession.streamingText = next;
+            return next;
+          });
+        }
+      });
+    }
+  }, [currentSession]);
 
   // 親からの editorLogs または novelData/projectId 変更時の同期（別作品切り替え時に他作品のログが混入するのを完璧に遮断）
   useEffect(() => {
@@ -259,7 +312,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
               `[警告] プロット生成中に一時的エラーが発生しました (${err.message})。自動リカバリ中 (リトライ ${outlineAttempt}/3 回目)...`,
             ]);
             setCurrentStatus(`一時的エラーのためプロット生成を自動リトライ中 (${outlineAttempt}/3 回目)...`);
-            await new Promise((r) => setTimeout(r, 2000));
+            await delayWithSignal(2000, controller.signal);
           } else {
             throw new Error(`3回のリトライ後もプロットを生成できませんでした (${err.message})。`);
           }
@@ -444,15 +497,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                 chapter,
                 sIdx,
                 prevSummary,
-                (chunk) => {
-                  setStreamingText((prev) => {
-                    const updated = prev + chunk;
-                    if (streamingEndRef.current) {
-                      streamingEndRef.current.scrollIntoView({ behavior: 'smooth' });
-                    }
-                    return updated;
-                  });
-                },
+                handleStreamChunk,
                 currentSession.abortController.signal,
                 aiSettings
               );
@@ -564,15 +609,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                         prevSummary,
                         draftedContent,
                         review.comments,
-                        (chunk) => {
-                          setStreamingText((prev) => {
-                            const updated = prev + chunk;
-                            if (streamingEndRef.current) {
-                              streamingEndRef.current.scrollIntoView({ behavior: 'smooth' });
-                            }
-                            return updated;
-                          });
-                        },
+                        handleStreamChunk,
                         currentSession.abortController.signal,
                         aiSettings
                       );
@@ -686,7 +723,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                 ]);
                 setCurrentStatus(`一時的エラーのためシーン ${sIdx + 1} を自動リカバリ中 (リトライ ${sceneAttempt}/3 回目)...`);
                 setStreamingText('');
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await delayWithSignal(2000, currentSession.abortController?.signal);
               } else {
                 throw new Error(`3回のリトライ後も ${chapter.title} シーン ${sIdx + 1} を生成できませんでした (${sceneErr.message})。`);
               }

@@ -106,6 +106,32 @@ export class OllamaService {
   }
 
   /**
+   * AbortSignal による Promise の即時キャンセルラッパー
+   */
+  private static wrapWithSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return promise;
+    if (signal.aborted) {
+      return Promise.reject(new DOMException('Aborted by user', 'AbortError'));
+    }
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => {
+        signal.removeEventListener('abort', onAbort);
+        reject(new DOMException('Aborted by user', 'AbortError'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      promise
+        .then((res) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(res);
+        })
+        .catch((err) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(err);
+        });
+    });
+  }
+
+  /**
    * 単発テキスト生成 (/api/chat) (Rust プロキシ優先)
    */
   static async chat(
@@ -118,6 +144,10 @@ export class OllamaService {
     formatJson: boolean = false,
     aiOptions?: { thinkMode?: 'nothink' | 'think' | 'none'; keepAlive?: string }
   ): Promise<string> {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted by user', 'AbortError');
+    }
+
     const thinkMode = aiOptions?.thinkMode ?? 'nothink';
     const keepAliveParam = this.parseKeepAlive(aiOptions?.keepAlive);
 
@@ -150,13 +180,19 @@ export class OllamaService {
 
     if (this.isTauriAvailable()) {
       try {
-        const rawRes = await invoke<string>('ollama_chat_raw', {
-          url: baseUrl,
-          body: JSON.stringify(bodyObj)
-        });
+        const rawRes = await this.wrapWithSignal(
+          invoke<string>('ollama_chat_raw', {
+            url: baseUrl,
+            body: JSON.stringify(bodyObj)
+          }),
+          signal
+        );
         const parsed = JSON.parse(rawRes);
         return this.decodeUtf8HexEscapes(parsed.message?.content || '');
       } catch (e: any) {
+        if (signal?.aborted || e?.name === 'AbortError') {
+          throw new DOMException('Aborted by user', 'AbortError');
+        }
         throw new Error(typeof e === 'string' ? e : e?.message || JSON.stringify(e));
       }
     }
@@ -193,6 +229,10 @@ export class OllamaService {
     formatJson: boolean = false,
     aiOptions?: { thinkMode?: 'nothink' | 'think' | 'none'; keepAlive?: string }
   ): Promise<string> {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted by user', 'AbortError');
+    }
+
     const thinkMode = aiOptions?.thinkMode ?? 'nothink';
     const keepAliveParam = this.parseKeepAlive(aiOptions?.keepAlive);
 
@@ -228,19 +268,30 @@ export class OllamaService {
       let unlisten: (() => void) | null = null;
       try {
         unlisten = await listen<string>(`ollama-chunk-${channelId}`, (event) => {
+          if (signal?.aborted) return;
           if (event.payload) {
             onChunk(this.decodeUtf8HexEscapes(event.payload));
           }
         });
 
-        const fullText = await invoke<string>('ollama_chat_stream_raw', {
-          channelId,
-          url: baseUrl,
-          body: JSON.stringify(bodyObj)
-        });
+        const fullText = await this.wrapWithSignal(
+          invoke<string>('ollama_chat_stream_raw', {
+            channelId,
+            url: baseUrl,
+            body: JSON.stringify(bodyObj)
+          }),
+          signal
+        );
+
+        if (signal?.aborted) {
+          throw new DOMException('Aborted by user', 'AbortError');
+        }
 
         return this.decodeUtf8HexEscapes(fullText);
       } catch (e: any) {
+        if (signal?.aborted || e?.name === 'AbortError') {
+          throw new DOMException('Aborted by user', 'AbortError');
+        }
         throw new Error(typeof e === 'string' ? e : e?.message || JSON.stringify(e));
       } finally {
         if (unlisten) unlisten();
@@ -271,6 +322,9 @@ export class OllamaService {
     let buffer = '';
 
     while (true) {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted by user', 'AbortError');
+      }
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -279,6 +333,9 @@ export class OllamaService {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
+        if (signal?.aborted) {
+          throw new DOMException('Aborted by user', 'AbortError');
+        }
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {

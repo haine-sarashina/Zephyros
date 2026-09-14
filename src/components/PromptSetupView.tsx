@@ -493,8 +493,9 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
                   'ライトノベル・ファンタジー',
                   'コメディ・ほのぼの日常',
                   'ダークファンタジー・シリアス',
-                  'R18・ライトノベル・ファンタジー',
                   'ラブコメ・青春',
+                  'ミステリー・サスペンス',
+                  'SF・近未来バトル',
                 ].map((preset) => (
                   <button
                     key={`tone-preset-${preset}`}
@@ -527,11 +528,11 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
             {!isWritingStarted && (
               <div className="flex flex-wrap gap-1.5 mb-1.5">
                 {[
-                  '全年齢ファンタジー読者',
-                  'なろう系・WEB小説ファン',
-                  '成年男性向けファンタジー読者',
-                  '10代〜20代若者向け',
-                  '大人向け・深み重視',
+                  'ファンタジー・ライトノベル読者',
+                  'WEB小説・異世界ファン',
+                  'コメディ・グルメ小説好き',
+                  'シリアス・重厚なドラマ好き',
+                  'ラブコメ・青春小説好き',
                 ].map((preset) => (
                   <button
                     key={`audience-preset-${preset}`}

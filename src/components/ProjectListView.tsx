@@ -149,6 +149,11 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({
                 (c) => c.status === 'completed' || (c.scenes.length > 0 && c.scenes.every((sc) => sc.wordCount > 0))
               ).length || 0;
             const totalWords = proj.novelData?.totalWordCount || 0;
+            const targetChCount =
+              proj.promptSettings?.targetChapterCount ||
+              (proj.novelData?.chapters.length && proj.novelData.chapters.length > 0
+                ? proj.novelData.chapters.length
+                : 12);
 
             return (
               <div
@@ -198,7 +203,7 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({
                 <div className="border-t border-slate-800/80 pt-3 space-y-3">
                   <div className="flex items-center justify-between text-xs font-mono">
                     <span className="text-slate-400">
-                      進捗: <strong className="text-indigo-300">{completedChCount}</strong> / 12 話
+                      進捗: <strong className="text-indigo-300">{completedChCount}</strong> / {targetChCount} 話
                     </span>
                     <span className="text-slate-400">
                       <strong className="text-emerald-400">{totalWords.toLocaleString()}</strong> 文字

@@ -552,7 +552,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                   chapter.title,
                   prevSummary,
                   currentSession.abortController.signal,
-                  aiSettings
+                  aiSettings,
+                  promptSettings
                 );
 
                 lastReviewComments = review.comments;
@@ -677,7 +678,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                 latestGlossary,
                 episodeTag,
                 currentSession.abortController.signal,
-                aiSettings
+                aiSettings,
+                promptSettings
               );
 
               latestBible = extractResult.updatedBible;

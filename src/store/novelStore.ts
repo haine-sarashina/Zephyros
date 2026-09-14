@@ -17,6 +17,7 @@ export const DEFAULT_PROMPT_SETTINGS: PromptSettings = {
   targetAudience: 'ライトノベルファン、ファンタジー・グルメ好き',
   targetChapterCount: 12,
   targetWordCount: 100000,
+  rating: 'all',
 };
 
 export const DEFAULT_SETTING_BIBLE: SettingBible = {

@@ -4,8 +4,8 @@ import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { AISettings, SystemPrompts } from '../types';
 import { OllamaService, OllamaModelInfo } from '../services/ollamaService';
-import { DEFAULT_SYSTEM_PROMPTS } from '../services/novelEngine';
-import { Settings, RefreshCw, CheckCircle2, XCircle, Bot, ShieldCheck, Save, Check, Sparkles, ArrowUpCircle, Download, FileText, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
+import { DEFAULT_SYSTEM_PROMPTS, R18_SYSTEM_PROMPTS } from '../services/novelEngine';
+import { Settings, RefreshCw, CheckCircle2, XCircle, Bot, ShieldCheck, Save, Check, Sparkles, ArrowUpCircle, Download, FileText, RotateCcw, ChevronDown, ChevronRight, Flame } from 'lucide-react';
 
 interface AISettingsViewProps {
   settings: AISettings;
@@ -524,14 +524,30 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
             </div>
           </div>
 
-          <button
-            onClick={handleResetPrompts}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer"
-            title="デフォルトのシステムプロンプトに戻す"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>デフォルトに戻す</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleResetPrompts}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer"
+              title="全年齢向けの標準システムプロンプトに復元"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>【全年齢向け】プリセット</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setFormState((prev) => ({
+                  ...prev,
+                  systemPrompts: { ...R18_SYSTEM_PROMPTS },
+                }));
+              }}
+              className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-200 hover:text-white text-xs font-medium rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer"
+              title="R-18（成人向け）の性愛・官能特化システムプロンプトを流し込む"
+            >
+              <Flame className="w-3.5 h-3.5 text-rose-400" />
+              <span>【R-18 成人向け】プリセット</span>
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">

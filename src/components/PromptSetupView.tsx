@@ -446,6 +446,43 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
           </div>
         </div>
 
+        {/* 作品レーティング選択 */}
+        <div className="space-y-2 pt-1 border-t border-slate-800/80">
+          <label className="block text-xs font-medium text-slate-400">作品レーティング (全年齢 / R-18成人向け)</label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={isWritingStarted}
+              onClick={() => updateStateAndSave((prev) => ({ ...prev, rating: 'all' }))}
+              className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                (formState.rating || 'all') === 'all'
+                  ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200 ring-1 ring-indigo-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <span className="font-bold">全年齢向け (General)</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isWritingStarted}
+              onClick={() => updateStateAndSave((prev) => ({ ...prev, rating: 'r18' }))}
+              className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                formState.rating === 'r18'
+                  ? 'bg-rose-600/30 border-rose-500 text-rose-200 ring-1 ring-rose-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              <span className="font-bold">R-18 成人向け (Adult / R-18)</span>
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            {formState.rating === 'r18'
+              ? '★ R-18成人向けプロンプトが自動適用されます。官能・性愛描写や過激な展開を濃密に執筆・校閲します。'
+              : '全年齢向けの一般文芸プロンプトが適用されます。'}
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* 作風 / トーン */}
           <div className="space-y-2">

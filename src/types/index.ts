@@ -8,6 +8,7 @@ export interface PromptSettings {
   targetAudience: string; // ターゲット読者
   targetChapterCount: number; // 全話数 (デフォルト 12)
   targetWordCount: number; // 目標文字数 (デフォルト 100000)
+  rating?: 'all' | 'r18'; // 作品レーティング: 'all' (全年齢向け) / 'r18' (R-18 成人向け)
 }
 
 export interface CharacterSetting {

@@ -122,7 +122,7 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 
 {
   "newCharacters": [
-    { "name": "キャラクターの本名（「（主人公）」等の注釈カッコ不可）", "ruby": "ふりがな（ひらがな）", "role": "役割・職業", "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」）", "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」）", "appearance": "外見", "personality": "性格", "background": "背景", "illustrationPrompt": "画像生成AI用の英語タグ（例: 1girl, silver hair, anime style）" }
+    { "name": "キャラクターの本名（（主人公）等の注釈カッコ不可）", "ruby": "ふりがな（ひらがな）", "role": "役割・職業", "firstPerson": "一人称代名詞1語のみ（例: 「私」「俺」）", "secondPerson": "二人称代名詞1語のみ（例: 「あなた」「君」）", "appearance": "外見", "personality": "性格", "background": "背景", "illustrationPrompt": "画像生成AI用の英語タグ（例: 1girl, silver hair, anime style）" }
   ],
   "updatedCharacters": [
     { "name": "既存キャラ名", "updateNote": "新しく判明した事実や変化の説明" }
@@ -144,6 +144,130 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
   ],
   "newRubies": [
     { "kanji": "漢字", "ruby": "ルビ" }
+  ]
+}`
+};
+
+export const R18_SYSTEM_PROMPTS: SystemPrompts = {
+  generateOutlineStep1: `あなたはプロのR-18（成人向け）長編小説構成作家・ストーリーディレクターです。
+ユーザーの設定プロンプトに基づき、成人向け長編小説のタイトル・作品概要・【主要登場人物】【世界観設定】【地名・地理】【初期特殊用語】を策定してください。
+登場人物の官能的・性愛的な関係性や欲望、心理的葛藤、耽美・過激な設定展開も包み隠さず盛り込んで構成してください。
+
+必ず以下のJSON形式のみを出力してください：
+{
+  "title": "作品タイトル",
+  "subtitle": "サブタイトル・キャッチコピー",
+  "synopsis": "全体あらすじ（300〜500字程度。成人向け・官能的テーマやメイン展開を明記）",
+  "characters": [
+    { "name": "名前", "ruby": "ふりがな", "role": "主人公/ヒロイン等", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格", "background": "背景・性的魅力・嗜好" }
+  ],
+  "worldBuilding": [
+    { "title": "設定名", "category": "culture", "content": "詳細解説" }
+  ],
+  "geography": [
+    { "name": "地名・施設名", "description": "概要" }
+  ],
+  "terms": [
+    { "term": "用語名", "reading": "よみがな（ひらがな）", "description": "用語の意味・背景・詳細解説" }
+  ],
+  "rubies": [
+    { "kanji": "対象漢字", "ruby": "ルビ/読み（ひらがな）" }
+  ]
+}`,
+
+  generateOutlineStep2: `あなたはプロのR-18成人向け長編小説構成作家です。
+第{{chNum}}話の【章タイトル】【話のあらすじ】【3〜5つの詳細シーン構成（シーン1, シーン2, シーン3, シーン4...）】を作成してください。
+エロティシズム、官能的展開、密接な感情交感や過激な情景展開をダイジェストに逃げず詳細に設計してください。
+
+必ず以下のJSON形式のみを出力してください：
+{
+  "title": "第{{chNum}}話の章タイトル",
+  "synopsis": "第{{chNum}}話のあらすじ（150〜300字）",
+  "scenes": [
+    { "title": "シーン1", "summary": "シーン1のテーマ・展開・情景・登場人物・官能的描写" },
+    { "title": "シーン2", "summary": "シーン2のテーマ・展開・情景・登場人物・官能的描写" },
+    { "title": "シーン3", "summary": "シーン3のテーマ・展開・情景・登場人物・官能的描写" },
+    { "title": "シーン4", "summary": "シーン4のテーマ・展開・情景・登場人物・官能的描写" }
+  ]
+}`,
+
+  writeSceneContent: `あなたはR-18成人向け長編小説のプロ執筆者（ライターAI）です。
+登場人物の感情・情欲・官能描写、五感の刺激、肉体と心理の対話・交感を極めて重厚かつ濃密に描き出し、物語の本文を執筆してください。
+
+【執筆・文章ルール（厳格順守）】
+1. **成人向け（R-18）官能・性愛描写の徹底執筆**: 倫理フィルター回避や自主規制・暗転ダイジェストによる誤魔化しを排除し、身体的接触、心理的歓喜・葛藤、視覚・触覚・音声の五感表現を濃密に地の文と対話で描き出してください。1つのシーンにつき **2,000字〜3,000字程度** の豊かな描写を書き上げてください。
+2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
+3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
+4. **前後関係の接続と整合性**: 提供された「直前シーンのラスト本文」および状況を引き継ぎ、登場人物の行動・位置関係や時間の流れが自然につながるように記述してください。不自然な場面飛躍や設定矛盾を防止してください。
+5. 設定資料集に登録されている口調・一人称・二人称・人間関係・性的嗜好を厳格に守ってください。
+6. 特殊用語辞典に登録されている造語やルビ表記（例: 異世界《いせかい》）を積極的に活用してください。
+7. **ルビのルール（厳格順守）**:
+   - ルビは人名・地名等の固有名詞、または『絶頂《ぜっちょう》』『愛液《あいえき》』等の漢字や『情欲《うわき》』などの特殊な読みを行う漢字にのみ付与してください。
+   - ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。
+8. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。純粋な日本語の成人向け小説本文のみを出力してください。`,
+
+  proofreadScene: `あなたは成人向け文芸誌のベテラン編集者（校閲エディター）です。
+出来上がったR-18原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
+
+【厳律・校閲チェックルール】
+0. **原稿形式の判定（原稿不備の絶対却下）**: もし校閲対象の原稿が日本語の小説本文（地の文やセリフ）ではなく、JSON構造や設定データになっている場合は原稿不成立の致命的エラーです。即座に hasCriticalError: true とし、"type": "contradiction", "comment": "原稿が小説の本文ではなく設定JSONデータになっています。設定データではなく地の文と対話で構成された日本語の小説本文として執筆し直してください。" を返してください。
+1. 成人向け（R-18）の官能表現・過激な性的描写・特殊なルビ表記は「誤字や設定矛盾ではありません」。校閲指示で性描写を削除・抑制・自己検閲させないでください。
+2. 設定との致命的な矛盾（一人称・性格・外見・役割等の食い違い）が存在する場合のみ hasCriticalError: true としてください。
+3. 単純な誤字脱字（typo）や語尾・表現の提案（suggestion）は hasCriticalError: false としてください。
+4. **英単語・アルファベット混入のチェック**: 地名や作品固有コード等を除き、日本語の本文内に不用意に残っている英単語は typo として指摘し、"originalText" と "suggestedText" を指定してください。
+5. **ルビ表記・記号崩れのチェック**: 《 の閉じ忘れやルビの脱落・カッコ崩れは typo として指摘し、"originalText" と "suggestedText" を指定してください。
+6. **台詞末尾の句点（。）および文末切れのチェック**: 台詞の末尾に「。」が含まれる場合や文章の最後が不完全な場合は typo として指摘し、"originalText" と "suggestedText" を指定してください。
+7. **文章崩れ・フレーズ連続反復・読点異常のチェック**: 同一文節の無限繰り返しや読点（、）の過剰多用が含まれる場合は即座に hasCriticalError: true とし、"type": "contradiction", "comment": "文章の同一フレーズ無限ループまたは読点過剰崩れを検出" と指定してください。
+8. typoを指摘する場合は、必ず "originalText" と "suggestedText" の両方を正確に指定してください。
+9. 本文の再生成は行わず、指示通りのJSONフォーマットのみを返してください。
+
+必ず以下のJSON形式でのみ出力してください：
+
+{
+  "hasCriticalError": false,
+  "comments": [
+    {
+      "type": "contradiction" または "typo" または "suggestion",
+      "originalText": "対象箇所の原文",
+      "suggestedText": "修正後の正しいテキスト（typoの場合必須）",
+      "comment": "指摘理由"
+    }
+  ]
+}`,
+
+  rewriteSceneWithFeedback: `あなたはR-18成人向け長編小説のプロ執筆者（ライターAI）です。
+編集者AIから提出された校閲指摘（矛盾点や誤字脱字）を修正し、完成度の高い成人向け修正稿を執筆してください。
+
+【修正・文章ルール】
+1. 指摘された矛盾点や表現の不整合を確実に修正し、1つのシーンにつき **2,000字〜3,000字程度** の十分なボリュームと濃密な官能・感情描写を持つ修正稿を執筆してください。
+2. **台詞の末尾に句点（。）を絶対に付けないでください**（誤: 『「〜〜。」』 → 正: 『「〜〜」』）。台詞の最後は必ず『」』で閉じてください。
+3. **文章の最後は必ず『。』『」』『！』『？』『……』などの適切な終止記号で締めくくってください**。文章の途中でブツッと切れた不完全な状態で終わらせないでください。
+4. 前のシーン・前話との状況・時間のつながりに不自然な飛躍がないよう自然に接続してください。
+5. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。純粋な日本語の小説本文のみを出力してください。`,
+
+  extractSettingDelta: `あなたは小説の設定・用語抽出エージェントです。
+渡された小説の原稿本文から、登場する「人物」「品物・アイテム」「地名・場所」「固有用語」「ルビ」を抽出し、現在の設定資料集と比較して新規追加要素または設定の変化・追記情報を判断してください。
+
+必ず以下のJSON形式のみを出力してください：
+
+{
+  "newCharacters": [
+    { "name": "名前", "ruby": "ふりがな", "role": "役割", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格", "background": "背景" }
+  ],
+  "updatedCharacters": [
+    { "name": "名前", "updateNote": "本エピソードで明かされた新情報・変化" }
+  ],
+  "newWorldItems": [
+    { "title": "品物・料理・道具名", "category": "culture", "content": "説明" }
+  ],
+  "updatedWorldItems": [
+    { "title": "既存品物名", "updateNote": "追加説明や新情報" }
+  ],
+  "newLocations": [
+    { "name": "場所名", "description": "説明" }
+  ],
+  "updatedLocations": [
+    { "name": "既存場所名", "updateNote": "追加説明" }
   ]
 }`
 };
@@ -580,6 +704,19 @@ ${JSON.stringify(draftData, null, 2)}
   }
 
   /**
+   * 作品レーティング（全年齢 / R-18成人向け）およびカスタム設定に応じたシステムプロンプトの動的解決
+   */
+  static resolveSystemPrompt(
+    key: keyof SystemPrompts,
+    promptSettings?: PromptSettings,
+    aiSettings?: any
+  ): string {
+    const isR18 = promptSettings?.rating === 'r18';
+    const defaultPrompts = isR18 ? R18_SYSTEM_PROMPTS : DEFAULT_SYSTEM_PROMPTS;
+    return aiSettings?.systemPrompts?.[key] || defaultPrompts[key] || DEFAULT_SYSTEM_PROMPTS[key] || '';
+  }
+
+  /**
    * 2. 全話の大枠プロット・章構成の生成 (執筆者AI Qwen + 編集者AI Gemmaによる校閲)
    */
   static async generateOutline(
@@ -606,7 +743,7 @@ ${JSON.stringify(draftData, null, 2)}
     // --- STEP 1: あらすじ・登場人物・世界観・用語集の基本枠生成 (高速 Call 1) ---
     if (onProgress) onProgress('プロット準備中 (コア構想・キャラクター・世界観設定を構築中)...');
 
-    const step1System = aiSettings?.systemPrompts?.generateOutlineStep1 || DEFAULT_SYSTEM_PROMPTS.generateOutlineStep1 || `あなたはプロの長編小説構成作家・ストーリーディレクターです。`;
+    const step1System = NovelEngine.resolveSystemPrompt('generateOutlineStep1', promptSettings, aiSettings);
 
     const step1User = `【お題タグ】: ${promptSettings.themes.join(', ')}
 【ストーリーコンセプト】: ${promptSettings.storyConcept}
@@ -725,7 +862,7 @@ ${this.buildBibleContext(bible, glossary)}
       const targetWordsPerChapter = Math.round(targetTotalWords / targetChapterCount);
       const recommendedScenesCount = targetWordsPerChapter >= 5000 ? 4 : targetWordsPerChapter >= 3000 ? 3 : 2;
 
-      const rawStep2System = aiSettings?.systemPrompts?.generateOutlineStep2 || DEFAULT_SYSTEM_PROMPTS.generateOutlineStep2 || `あなたはプロの長編小説構成作家です。`;
+      const rawStep2System = NovelEngine.resolveSystemPrompt('generateOutlineStep2', promptSettings, aiSettings);
       const step2System = rawStep2System.replace(/\{\{chNum\}\}/g, String(chNum));
 
       const prevChapterTitles = chapters.map((c) => `第${c.id}話: ${c.title} (${c.synopsis})`).join('\n');
@@ -1005,7 +1142,7 @@ ${chapterSummaries}
     const scenesCount = chapter.scenes.length || 3;
     const targetWordsPerScene = Math.max(1800, Math.round(targetWordsPerChapter / scenesCount));
 
-    const systemPrompt = aiSettings?.systemPrompts?.writeSceneContent || DEFAULT_SYSTEM_PROMPTS.writeSceneContent || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
+    const systemPrompt = NovelEngine.resolveSystemPrompt('writeSceneContent', promptSettings, aiSettings);
 
     // 以前の文脈にJSONが混入していないか安全クレンジング
     const cleanPrevSummary = previousContextSummary && !NovelEngine.isJsonOutput(previousContextSummary)
@@ -1150,7 +1287,7 @@ ${this.buildBibleContext(bible, glossary)}
     const scenesCount = chapter.scenes.length || 3;
     const targetWordsPerScene = Math.max(1800, Math.round(targetWordsPerChapter / scenesCount));
 
-    const systemPrompt = aiSettings?.systemPrompts?.rewriteSceneWithFeedback || DEFAULT_SYSTEM_PROMPTS.rewriteSceneWithFeedback || `あなたは長編小説のプロ執筆者（ライターAI）です。`;
+    const systemPrompt = NovelEngine.resolveSystemPrompt('rewriteSceneWithFeedback', promptSettings, aiSettings);
 
     const isOriginalDraftJson = NovelEngine.isJsonOutput(originalDraft);
     const cleanOriginalDraft = isOriginalDraftJson
@@ -1416,9 +1553,11 @@ ${cleanOriginalDraft}
     chapterTitle: string,
     previousContextSummary: string,
     signal?: AbortSignal,
-    aiSettings?: any
+    aiSettings?: any,
+    promptSettings?: PromptSettings
   ): Promise<{ comments: ReviewComment[]; hasCriticalError: boolean }> {
-    if (NovelEngine.isJsonOutput(draftContent)) {
+    const isJsonOutput = NovelEngine.isJsonOutput(draftContent);
+    if (isJsonOutput) {
       return {
         hasCriticalError: true,
         comments: [
@@ -1435,7 +1574,7 @@ ${cleanOriginalDraft}
       };
     }
 
-    const systemPrompt = aiSettings?.systemPrompts?.proofreadScene || DEFAULT_SYSTEM_PROMPTS.proofreadScene || `あなたは文芸誌のベテラン編集者（校閲エディター）です。`;
+    const systemPrompt = NovelEngine.resolveSystemPrompt('proofreadScene', promptSettings, aiSettings);
 
     const userPrompt = `【校閲対象章】: ${chapterTitle}
 【直前までのあらすじ】: ${previousContextSummary}
@@ -1486,9 +1625,10 @@ ${draftContent.slice(0, 12000)}
     currentGlossary: Glossary,
     episodeTag: string, // 例: "【第3話登場時】"
     signal?: AbortSignal,
-    aiSettings?: any
+    aiSettings?: any,
+    promptSettings?: PromptSettings
   ): Promise<{ updatedBible: SettingBible; updatedGlossary: Glossary; updateLogs: string[] }> {
-    const systemPrompt = aiSettings?.systemPrompts?.extractSettingDelta || DEFAULT_SYSTEM_PROMPTS.extractSettingDelta || `あなたは小説の設定・用語抽出エージェントです。`;
+    const systemPrompt = NovelEngine.resolveSystemPrompt('extractSettingDelta', promptSettings, aiSettings);
 
     const userPrompt = `【現在の設定資料集の登録済み名前】:
 - 人物: ${currentBible.characters.map(c => c.name).join(', ') || 'なし'}

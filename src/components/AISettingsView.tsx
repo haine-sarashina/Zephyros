@@ -553,6 +553,11 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
         <div className="space-y-3">
           {[
             {
+              key: 'generateGacha' as keyof SystemPrompts,
+              title: '0. お題ガチャ AI (コンセプト・あらすじ発想)',
+              desc: '指定キーホルダー/テーマから作品メインコンセプトとお題あらすじを自動生成する指示',
+            },
+            {
               key: 'generateOutlineStep1' as keyof SystemPrompts,
               title: '1. プロット全体＆初期設定構成 (Step 1)',
               desc: '作品タイトル・全体あらすじ・初期キャラクター・世界観・特殊用語の策定指示',

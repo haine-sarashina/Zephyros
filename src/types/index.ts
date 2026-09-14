@@ -78,6 +78,7 @@ export interface ThinkCommandTargets {
 }
 
 export interface SystemPrompts {
+  generateGacha?: string; // お題ガチャ AI (コンセプト・あらすじ生成)
   generateOutlineStep1?: string; // プロット全体＆初期設定構成 (Step 1)
   generateOutlineStep2?: string; // 各話プロット・シーン構成 (Step 2)
   writeSceneContent?: string; // 本文リアルタイム執筆 (Writer AI)

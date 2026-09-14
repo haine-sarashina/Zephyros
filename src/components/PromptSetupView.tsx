@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PromptSettings, AISettings } from '../types';
 import { OllamaService } from '../services/ollamaService';
+import { NovelEngine } from '../services/novelEngine';
 import { Sparkles, Plus, X, Save, Check, Lock, Dices, Loader2, AlertCircle, Edit2 } from 'lucide-react';
 
 interface PromptSetupViewProps {
@@ -69,18 +70,7 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
     const model = aiSettings?.writerModel || 'qwen2.5:32b';
     const themes = formState.themes.length > 0 ? formState.themes : ['異世界', 'ダンジョン', 'パスタ屋'];
 
-    const systemPrompt = `あなたはプロのライトノベル作家・アイデア発想AIです。
-ユーザーが指定した【お題キーワード】を全て活かし、日本語として自然で美しく、読者がワクワクする長編小説の「メインコンセプト（キャッチコピー）」と「あらすじ」を創作してください。
-
-【重要制約】
-・お題キーワードに指定された要素のみを軸にし、キーワードに含まれていないメタ単語（「ガチャ」等）を勝手にストーリーのテーマや作中設定として挿入しないでください。
-
-必ず以下のJSON形式のみを出力してください。思考プロセス(<think>)や解説、Markdown装飾は含めないでください。
-
-{
-  "storyConcept": "メインコンセプト・キャッチコピー（50字程度。キーワードを自然に組み合わせたキャッチーな文言）",
-  "detailedPrompt": "【あらすじ】\\nから始まる詳しく魅力的なあらすじ（300〜500字程度。主人公の設定、舞台、メイン展開など）"
-}`;
+    const systemPrompt = NovelEngine.resolveSystemPrompt('generateGacha', formState, aiSettings);
 
     const userPrompt = `【お題キーワード】: ${themes.join(', ')}
 

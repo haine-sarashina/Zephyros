@@ -18,7 +18,12 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 }`,
 
   generateOutlineStep1: `あなたはプロの長編小説構成作家・ストーリーディレクターです。
-ユーザーの設定プロンプトに基づき、長編小説のタイトル・作品概要・【主要登場人物】【世界観設定】【地名・地理】【初期特殊用語】のみを策定してください。
+ユーザーの設定プロンプトに基づき、長編小説のタイトル・作品概要・【主要登場人物】【世界観設定】【地名・地理】【初期特殊用語】を策定してください。
+
+【厳格出力ルール】
+1. 思考プロセス(<think>)、前置き・解説テキスト、Markdown装飾は含めず、純粋なJSONオブジェクトのみを出力してください。
+2. JSONの文字列値内部でダブルクォーテーション（"）を使用する場合は、必ず 「 」 カギカッコに置き換えるか \\" にエスケープしてください。
+3. characters (主要人物2〜4名), worldBuilding (世界観・品物2〜4件), geography (地名1〜3件), terms (固有名詞・用語2〜4件), rubies (主要ルビ2〜4件) を必ず全て含めて出力してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -179,6 +184,11 @@ export const R18_SYSTEM_PROMPTS: SystemPrompts = {
   generateOutlineStep1: `あなたはプロのR-18（成人向け）長編小説構成作家・ストーリーディレクターです。
 ユーザーの設定プロンプトに基づき、成人向け長編小説のタイトル・作品概要・【主要登場人物】【世界観設定】【地名・地理】【初期特殊用語】を策定してください。
 登場人物の官能的・性愛的な関係性や欲望、心理的葛藤、耽美・過激な設定展開も包み隠さず盛り込んで構成してください。
+
+【厳格出力ルール】
+1. 思考プロセス(<think>)、前置き・解説テキスト、Markdown装飾は含めず、純粋なJSONオブジェクトのみを出力してください。
+2. JSONの文字列値内部でダブルクォーテーション（"）を使用する場合は、必ず 「 」 カギカッコに置き換えるか \\" にエスケープしてください。
+3. characters (主要人物2〜4名), worldBuilding (世界観・品物2〜4件), geography (地名1〜3件), terms (固有名詞・用語2〜4件), rubies (主要ルビ2〜4件) を必ず全て含めて出力してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -531,6 +541,37 @@ export class NovelEngine {
   }
 
   /**
+   * 不完全または構造が一部崩れたテキストから指定キー名のJSON配列項目をレスキュー抽出する
+   */
+  private static extractArrayFromRawJson<T = any>(rawText: string, keyNames: string[]): T[] {
+    for (const key of keyNames) {
+      const arrayRegex = new RegExp(`"${key}"\\s*:\\s*(\\[[\\s\\S]*?\\])(?:\\s*,|\\s*\\})`, 'i');
+      const match = rawText.match(arrayRegex);
+      if (match && match[1]) {
+        try {
+          const parsed = this.cleanAndParseJson(match[1]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch (_) {
+          const itemMatches = match[1].matchAll(/\{[\s\S]*?\}/g);
+          const items: any[] = [];
+          for (const im of itemMatches) {
+            try {
+              const itemParsed = this.cleanAndParseJson(im[0]);
+              if (itemParsed && typeof itemParsed === 'object') {
+                items.push(itemParsed);
+              }
+            } catch (_) {}
+          }
+          if (items.length > 0) return items as T[];
+        }
+      }
+    }
+    return [];
+  }
+
+  /**
    * JSONパース不可能な生のLLMテキストからプロット情報を正規表現で救出する最終フォールバック
    */
   // @ts-ignore
@@ -565,17 +606,23 @@ export class NovelEngine {
       }
     }
 
+    const characters = this.extractArrayFromRawJson(text, ['characters', 'character', 'characterSettings', 'charList']);
+    const worldBuilding = this.extractArrayFromRawJson(text, ['worldBuilding', 'world_building', 'world', 'worldItems']);
+    const geography = this.extractArrayFromRawJson(text, ['geography', 'locations', 'places', 'locationSettings']);
+    const terms = this.extractArrayFromRawJson(text, ['terms', 'glossary', 'termList', 'vocabulary']);
+    const rubies = this.extractArrayFromRawJson(text, ['rubies', 'rubyList', 'rubySettings']);
+
     return {
       title,
       subtitle,
       synopsis,
       outline: synopsis,
       chapters,
-      characters: [],
-      worldBuilding: [],
-      geography: [],
-      terms: [],
-      rubies: []
+      characters,
+      worldBuilding,
+      geography,
+      terms,
+      rubies
     };
   }
 
@@ -793,16 +840,69 @@ ${this.buildBibleContext(bible, glossary)}
     let step1Parsed: any = {};
     try {
       step1Parsed = this.cleanAndParseJson(step1Raw);
-    } catch {
-      step1Parsed = {
-        title: `${promptSettings.themes.join('×')}の物語`,
-        subtitle: promptSettings.storyConcept,
-        synopsis: promptSettings.detailedPrompt || promptSettings.storyConcept,
-      };
+    } catch (err: any) {
+      console.warn('Step 1 cleanAndParseJson failed, running fallback extractor:', err);
+      step1Parsed = this._extractOutlineFromRawText(step1Raw, targetChapterCount);
+    }
+
+    let rawChars: any[] =
+      step1Parsed.characters ||
+      step1Parsed.character ||
+      step1Parsed.characterSettings ||
+      step1Parsed.charList ||
+      this.extractArrayFromRawJson(step1Raw, ['characters', 'character', 'characterSettings', 'charList']);
+
+    let rawWorld: any[] =
+      step1Parsed.worldBuilding ||
+      step1Parsed.world_building ||
+      step1Parsed.world ||
+      step1Parsed.worldItems ||
+      this.extractArrayFromRawJson(step1Raw, ['worldBuilding', 'world_building', 'world', 'worldItems']);
+
+    let rawGeo: any[] =
+      step1Parsed.geography ||
+      step1Parsed.locations ||
+      step1Parsed.places ||
+      step1Parsed.locationSettings ||
+      this.extractArrayFromRawJson(step1Raw, ['geography', 'locations', 'places', 'locationSettings']);
+
+    let rawTerms: any[] =
+      step1Parsed.terms ||
+      step1Parsed.glossary ||
+      step1Parsed.termList ||
+      step1Parsed.vocabulary ||
+      this.extractArrayFromRawJson(step1Raw, ['terms', 'glossary', 'termList', 'vocabulary']);
+
+    let rawRubies: any[] =
+      step1Parsed.rubies ||
+      step1Parsed.rubyList ||
+      step1Parsed.rubySettings ||
+      this.extractArrayFromRawJson(step1Raw, ['rubies', 'rubyList', 'rubySettings']);
+
+    if (!Array.isArray(rawChars)) rawChars = [];
+    if (!Array.isArray(rawWorld)) rawWorld = [];
+    if (!Array.isArray(rawGeo)) rawGeo = [];
+    if (!Array.isArray(rawTerms)) rawTerms = [];
+    if (!Array.isArray(rawRubies)) rawRubies = [];
+
+    // もしLLM出力から登場人物が一切抽出できなかった場合のフェールセーフ
+    if (rawChars.length === 0) {
+      rawChars = [
+        {
+          name: '主人公',
+          ruby: 'しゅじんこう',
+          role: '主人公',
+          firstPerson: '私',
+          secondPerson: 'あなた',
+          appearance: '物語の主要人物',
+          personality: 'プロットに即して行動する主人公',
+          background: promptSettings.storyConcept || '作品の主要人物',
+        },
+      ];
     }
 
     const initialBible: SettingBible = {
-      characters: (step1Parsed.characters || []).map((c: any, idx: number) => {
+      characters: rawChars.map((c: any, idx: number) => {
         const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name || `登場人物${idx + 1}`);
         const role = c.role || extractedRole || '主要人物';
         const appearance = c.appearance || '初期プロットにて設定';
@@ -826,7 +926,7 @@ ${this.buildBibleContext(bible, glossary)}
           updatedEpisode: '【初期プロット策定時】',
         };
       }),
-      worldBuilding: (step1Parsed.worldBuilding || []).map((w: any, idx: number) => {
+      worldBuilding: rawWorld.map((w: any, idx: number) => {
         const title = (w.title || w.name || `設定${idx + 1}`).trim();
         return {
           id: `wb-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
@@ -836,7 +936,7 @@ ${this.buildBibleContext(bible, glossary)}
           updatedEpisode: '【初期プロット策定時】',
         };
       }),
-      geography: (step1Parsed.geography || []).map((g: any, idx: number) => {
+      geography: rawGeo.map((g: any, idx: number) => {
         const name = (g.name || g.title || `地名${idx + 1}`).trim();
         return {
           id: `geo-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
@@ -848,7 +948,7 @@ ${this.buildBibleContext(bible, glossary)}
     };
 
     const initialGlossary: Glossary = {
-      terms: (step1Parsed.terms || []).map((t: any, idx: number) => {
+      terms: rawTerms.map((t: any, idx: number) => {
         const term = (t.term || t.name || '').trim();
         const reading = NovelEngine.toHiragana(t.reading || t.ruby || '');
         const description = t.description || t.meaning || t.content || '初期プロットにて設定された特殊用語';
@@ -861,7 +961,7 @@ ${this.buildBibleContext(bible, glossary)}
           updatedEpisode: '【初期プロット策定時】',
         };
       }),
-      rubies: (step1Parsed.rubies || []).map((r: any, idx: number) => {
+      rubies: rawRubies.map((r: any, idx: number) => {
         const kanji = (r.kanji || '').trim();
         const ruby = NovelEngine.toHiragana((r.ruby || '').trim());
         return {

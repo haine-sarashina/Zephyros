@@ -23,7 +23,8 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 【厳格出力ルール】
 1. 思考プロセス(<think>)、前置き・解説テキスト、Markdown装飾は含めず、純粋なJSONオブジェクトのみを出力してください。
 2. JSONの文字列値内部でダブルクォーテーション（"）を使用する場合は、必ず 「 」 カギカッコに置き換えるか \\" にエスケープしてください。
-3. characters (主要人物2〜4名), worldBuilding (世界観・品物2〜4件), geography (地名1〜3件), terms (固有名詞・用語2〜4件), rubies (主要ルビ2〜4件) を必ず全て含めて出力してください。
+3. **登場人物（characters）は必ず『主人公』『メインヒロイン（1〜2名）』『サブキャラクター/ライバル/仲間（1〜2名）』を含め、合計 3〜5 名を作成してください。主人公1名のみの出力は絶対禁止です。**
+4. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -31,7 +32,9 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
   "subtitle": "サブタイトル・キャッチコピー",
   "synopsis": "全体あらすじ（300〜500字程度）",
   "characters": [
-    { "name": "名前", "ruby": "ふりがな", "role": "主人公/ヒロイン等", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格", "background": "背景" }
+    { "name": "主人公名", "ruby": "しゅじんこう", "role": "主人公", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格・口調", "background": "背景・目的" },
+    { "name": "ヒロイン名", "ruby": "ひろいん", "role": "メインヒロイン", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "魅力的な容姿", "personality": "性格", "background": "主人公との関係" },
+    { "name": "サブキャラ名", "ruby": "さぶきゃら", "role": "仲間/ライバル/先輩", "firstPerson": "「僕」", "secondPerson": "「君」", "appearance": "特徴的な外見", "personality": "性格", "background": "作中での立場" }
   ],
   "worldBuilding": [
     { "title": "設定名", "category": "culture", "content": "詳細解説" }
@@ -188,7 +191,8 @@ export const R18_SYSTEM_PROMPTS: SystemPrompts = {
 【厳格出力ルール】
 1. 思考プロセス(<think>)、前置き・解説テキスト、Markdown装飾は含めないでください。
 2. JSONの文字列値内部でダブルクォーテーション（"）を使用する場合は、必ず 「 」 カギカッコに置き換えるか \\" にエスケープしてください。
-3. characters (主要人物2〜4名), worldBuilding (世界観・品物2〜4件), geography (地名1〜3件), terms (固有名詞・用語2〜4件), rubies (主要ルビ2〜4件) を必ず全て含めて出力してください。
+3. **登場人物（characters）は必ず『主人公』『メインヒロイン（1〜2名）』『サブキャラクター/ライバル/仲間（1〜2名）』を含め、合計 3〜5 名を作成してください。主人公1名のみの出力は絶対禁止です。**
+4. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -196,7 +200,9 @@ export const R18_SYSTEM_PROMPTS: SystemPrompts = {
   "subtitle": "サブタイトル・キャッチコピー",
   "synopsis": "全体あらすじ（300〜500字程度。二次元ドリーム文庫風・ファンタジー成人向けテーマやメイン展開を明記）",
   "characters": [
-    { "name": "名前", "ruby": "ふりがな", "role": "主人公/ヒロイン等", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格", "background": "背景・性的魅力・嗜好" }
+    { "name": "主人公名", "ruby": "しゅじんこう", "role": "主人公", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "外見", "personality": "性格・口調", "background": "背景・目的" },
+    { "name": "ヒロイン名", "ruby": "ひろいん", "role": "メインヒロイン", "firstPerson": "「私」", "secondPerson": "「あなた」", "appearance": "魅力的な容姿・体型", "personality": "性格・関係性", "background": "主人公との出会い・性的魅力" },
+    { "name": "サブキャラ名", "ruby": "さぶきゃら", "role": "仲間/ライバル/先輩", "firstPerson": "「僕」", "secondPerson": "「君」", "appearance": "特徴的な外見", "personality": "性格", "background": "作中での立場" }
   ],
   "worldBuilding": [
     { "title": "設定名", "category": "culture", "content": "詳細解説" }
@@ -837,7 +843,11 @@ ${JSON.stringify(draftData, null, 2)}
 
 ${this.buildBibleContext(bible, glossary)}
 
-上記設定を踏まえ、全${targetChapterCount}話構成の作品タイトル・全体あらすじ・初期設定資料集を作成してください。`;
+【重要命令】:
+1. 物語の『主人公』に加えて、作品を彩る『メインヒロイン（1〜2名）』や『サブキャラクター/仲間/ライバル』を必ず含め、合計 3〜5 名の魅力的な登場人物（characters）を作成してください。主人公1名のみの作成は禁止します。
+2. 世界観設定（worldBuilding 3〜5件）、地名（geography 2〜4件）、特殊用語（terms 3〜5件）、ルビ表記（rubies 3〜5件）も必ず全て充実させて作成してください。
+
+上記を踏まえ、全${targetChapterCount}話構成の作品タイトル・全体あらすじ・初期設定資料集を作成してください。`;
 
     let step1Raw = '';
     try {
@@ -895,20 +905,44 @@ ${this.buildBibleContext(bible, glossary)}
     if (!Array.isArray(rawTerms)) rawTerms = [];
     if (!Array.isArray(rawRubies)) rawRubies = [];
 
-    // もしLLM出力から登場人物が一切抽出できなかった場合のフェールセーフ
-    if (rawChars.length === 0) {
-      rawChars = [
-        {
+    // もしLLM出力の登場人物が不足している場合のフェールセーフ（ヒロイン・サブキャラ補完）
+    if (rawChars.length < 2) {
+      if (rawChars.length === 0) {
+        rawChars.push({
           name: '主人公',
           ruby: 'しゅじんこう',
           role: '主人公',
+          firstPerson: '俺',
+          secondPerson: '君',
+          appearance: '物語の主人公',
+          personality: '情熱的で真っ直ぐな性格',
+          background: promptSettings.storyConcept || '作品の主人公',
+        });
+      }
+      if (!rawChars.some((c) => (c.role || '').includes('ヒロイン'))) {
+        rawChars.push({
+          name: 'ヒロイン',
+          ruby: 'ひろいん',
+          role: 'メインヒロイン',
           firstPerson: '私',
           secondPerson: 'あなた',
-          appearance: '物語の主要人物',
-          personality: 'プロットに即して行動する主人公',
-          background: promptSettings.storyConcept || '作品の主要人物',
-        },
-      ];
+          appearance: '容姿端麗で印象的なヒロイン',
+          personality: '主人公と深く関わるヒロイン',
+          background: promptSettings.storyConcept || '物語のキーパーソン',
+        });
+      }
+      if (rawChars.length < 3) {
+        rawChars.push({
+          name: 'サブキャラクター',
+          ruby: 'さぶきゃらくたー',
+          role: '仲間・協力者',
+          firstPerson: '僕',
+          secondPerson: 'お前',
+          appearance: '特徴的な外見',
+          personality: '賑やかで頼りになる性格',
+          background: '作中の事件や日常に関わる人物',
+        });
+      }
     }
 
     const initialBible: SettingBible = {

@@ -26,6 +26,7 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 3. **作品タイトル（title）は10〜25文字程度の短く魅力的な書籍タイトルを作成してください。あらすじ本文や指定文（例: 『主人公は女子高生のサキュバスで〜〜』）をそのままタイトルに設定することは絶対禁止です。**
 4. **登場人物（characters）はユーザーの【詳細指定】に書かれた性別・立場・配役・状態（女性主人公なら性別・一人称「私」等）を完璧に尊重し、合計 3〜5 名を作成してください。主人公の性別や設定を勝手に男性等に改変することは絶対禁止です。**
 5. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
+6. **【あらすじ本文のコピー禁止】**: worldBuildingのcontent、geographyのdescription、termsのdescription、charactersのbackgroundに【あらすじ全文】や【詳細指定の文章】をそのままコピーして使い回すことは絶対禁止です。各項目（設定、地名、用語、キャラクター）ごとに、その項目固有の短い個別解説（30〜100字程度）を記述してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -196,6 +197,7 @@ export const R18_SYSTEM_PROMPTS: SystemPrompts = {
 3. **作品タイトル（title）は10〜25文字程度の短く魅力的な書籍タイトルを作成してください。あらすじ本文や指定文（例: 『主人公は女子高生のサキュバスで〜〜』）をそのままタイトルに設定することは絶対禁止です。**
 4. **登場人物（characters）はユーザーの【詳細指定】に書かれた性別・立場・配役・状態（女性主人公なら性別・一人称「私」等）を完璧に尊重し、合計 3〜5 名を作成してください。主人公の性別や設定を勝手に男性等に改変することは絶対禁止です。**
 5. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
+6. **【あらすじ本文のコピー禁止】**: worldBuildingのcontent、geographyのdescription、termsのdescription、charactersのbackgroundに【あらすじ全文】や【詳細指定の文章】をそのままコピーして使い回すことは絶対禁止です。各項目（設定、地名、用語、キャラクター）ごとに、その項目固有の短い個別解説（30〜100字程度）を記述してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -629,9 +631,9 @@ export class NovelEngine {
         role: '主人公',
         firstPerson: '私',
         secondPerson: 'あなた',
-        appearance: promptSettings.detailedPrompt ? promptSettings.detailedPrompt.slice(0, 100) : '魅力的な容姿の少女主人公',
+        appearance: '魅力的な容姿の少女主人公',
         personality: '作中の詳細指定に基づく性格',
-        background: promptSettings.detailedPrompt || promptSettings.storyConcept,
+        background: '作中の詳細指定・プロットに基づく人物背景',
         illustrationPrompt: '1girl, succubus, high school girl, anime style character',
       });
     } else {
@@ -643,7 +645,7 @@ export class NovelEngine {
         secondPerson: '君',
         appearance: '物語の主人公',
         personality: '情熱的で真っ直ぐな性格',
-        background: promptSettings.detailedPrompt || promptSettings.storyConcept,
+        background: '物語の主人公としての背景と目的',
         illustrationPrompt: '1boy, anime style character',
       });
     }
@@ -669,7 +671,7 @@ export class NovelEngine {
         secondPerson: '君',
         appearance: '主人公と深く関わる人物',
         personality: '作中の設定に基づく人物',
-        background: promptSettings.storyConcept,
+        background: '主人公の相手役となる作中の主要人物',
         illustrationPrompt: '1boy, anime style character',
       });
     } else {
@@ -681,7 +683,7 @@ export class NovelEngine {
         secondPerson: 'あなた',
         appearance: '容姿端麗なヒロイン',
         personality: '主人公と深く関わる人物',
-        background: promptSettings.storyConcept,
+        background: '主人公と深い関係を持つ主要人物',
         illustrationPrompt: '1girl, anime style character',
       });
     }
@@ -1057,28 +1059,42 @@ ${JSON.stringify(draftData, null, 2)}
       }
     }
 
+    // ゴミ設定・メタ項目の事前フィルタリング
+    rawWorld = rawWorld.filter((w) => w && (w.title || w.name) && !NovelEngine.isJunkTitle((w.title || w.name).trim()));
+    rawGeo = rawGeo.filter((g) => g && (g.name || g.title) && !NovelEngine.isJunkTitle((g.name || g.title).trim()));
+    rawTerms = rawTerms.filter((t) => t && (t.term || t.name) && !NovelEngine.isJunkTitle((t.term || t.name).trim()));
+    rawRubies = rawRubies.filter((r) => r && r.kanji && !NovelEngine.isJunkTitle(r.kanji.trim()));
+
     // 世界観設定の補完
     if (rawWorld.length === 0) {
       promptSettings.themes.forEach((t) => {
-        if (t.trim()) {
+        const cleanT = t.trim();
+        if (cleanT && !NovelEngine.isJunkTitle(cleanT)) {
           rawWorld.push({
-            title: t.trim(),
-            category: 'culture',
-            content: `お題「${t.trim()}」に関連する主要設定`,
+            title: cleanT,
+            category: NovelEngine.classifyCategory(cleanT),
+            content: `お題キーワード「${cleanT}」に関連する作中設定`,
           });
         }
       });
       const bracketMatches = Array.from((promptSettings.detailedPrompt || '').matchAll(/『([^』]+)』/g));
       bracketMatches.forEach((m) => {
         const item = m[1].trim();
-        if (item && !rawWorld.some((w) => w.title === item)) {
+        if (item && !NovelEngine.isJunkTitle(item) && !rawWorld.some((w) => w.title === item)) {
           rawWorld.push({
             title: item,
-            category: 'other',
-            content: `詳細指定より抽出された設定項目「${item}」`,
+            category: NovelEngine.classifyCategory(item),
+            content: `詳細指定より抽出された固有設定「${item}」`,
           });
         }
       });
+      if (rawWorld.length === 0) {
+        rawWorld.push({
+          title: promptSettings.themes[0] || '特有の世界観',
+          category: 'culture',
+          content: promptSettings.storyConcept || '物語の中心となる世界観設定',
+        });
+      }
     }
 
     // 地理・地名の補完
@@ -1086,7 +1102,7 @@ ${JSON.stringify(draftData, null, 2)}
       const cornerMatches = Array.from((promptSettings.detailedPrompt || '').matchAll(/【([^】]+)】/g));
       cornerMatches.forEach((m) => {
         const place = m[1].trim();
-        if (place && !place.includes('話') && !rawGeo.some((g) => g.name === place)) {
+        if (place && !place.includes('話') && !NovelEngine.isJunkTitle(place) && !rawGeo.some((g) => g.name === place)) {
           rawGeo.push({
             name: place,
             description: `詳細指定より抽出された舞台「${place}」`,
@@ -1094,9 +1110,16 @@ ${JSON.stringify(draftData, null, 2)}
         }
       });
       if (rawGeo.length === 0) {
+        let geoName = '劇中の主要舞台';
+        const fullText = `${promptSettings.storyConcept}\n${promptSettings.detailedPrompt}`;
+        if (/学園|学校|高校|大学/.test(fullText)) geoName = '私立学園';
+        else if (/ダンジョン|迷宮|地下/.test(fullText)) geoName = '深層ダンジョン';
+        else if (/異世界|王国|帝国|街|都市/.test(fullText)) geoName = '王都・中央街';
+        else if (/館|屋敷|部屋|自宅/.test(fullText)) geoName = '劇中の館・自室';
+
         rawGeo.push({
-          name: '物語の主要舞台',
-          description: promptSettings.storyConcept || '物語の劇中舞台',
+          name: geoName,
+          description: promptSettings.storyConcept ? promptSettings.storyConcept.slice(0, 80) : '物語の劇中舞台',
         });
       }
     }
@@ -1104,11 +1127,12 @@ ${JSON.stringify(draftData, null, 2)}
     // 用語の補完
     if (rawTerms.length === 0) {
       promptSettings.themes.forEach((t) => {
-        if (t.trim()) {
+        const cleanT = t.trim();
+        if (cleanT && !NovelEngine.isJunkTitle(cleanT)) {
           rawTerms.push({
-            term: t.trim(),
-            reading: NovelEngine.toHiragana(t.trim()),
-            description: `お題「${t.trim()}」`,
+            term: cleanT,
+            reading: NovelEngine.toHiragana(cleanT),
+            description: `お題「${cleanT}」`,
           });
         }
       });
@@ -1118,10 +1142,14 @@ ${JSON.stringify(draftData, null, 2)}
     if (rawRubies.length === 0) {
       const rubyMatches = Array.from((promptSettings.detailedPrompt || '').matchAll(/([一-龠+々ヶ]+)《([^》]+)》/g));
       rubyMatches.forEach((m) => {
-        rawRubies.push({
-          kanji: m[1].trim(),
-          ruby: NovelEngine.toHiragana(m[2].trim()),
-        });
+        const kanji = m[1].trim();
+        const ruby = NovelEngine.toHiragana(m[2].trim());
+        if (kanji && ruby && !NovelEngine.isJunkTitle(kanji)) {
+          rawRubies.push({
+            kanji,
+            ruby,
+          });
+        }
       });
     }
 
@@ -1129,7 +1157,13 @@ ${JSON.stringify(draftData, null, 2)}
       characters: rawChars.map((c: any, idx: number) => {
         const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name || `登場人物${idx + 1}`);
         const role = c.role || extractedRole || '主要人物';
-        const appearance = c.appearance || '初期プロットにて設定';
+        let appearance = c.appearance && !NovelEngine.isSynopsisCopy(c.appearance, promptSettings, step1Parsed.synopsis)
+          ? c.appearance
+          : `「${cleanName}」の外見・容姿特徴`;
+        let background = c.background && !NovelEngine.isSynopsisCopy(c.background, promptSettings, step1Parsed.synopsis)
+          ? c.background
+          : `「${cleanName}」の作中における人物背景・目的`;
+
         const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
           name: cleanName,
           appearance,
@@ -1145,27 +1179,35 @@ ${JSON.stringify(draftData, null, 2)}
           secondPerson: NovelEngine.sanitizePronoun(c.secondPerson, 'あなた', true),
           appearance,
           personality: c.personality || '初期プロットにて設定',
-          background: c.background || '初期プロットにて設定',
+          background,
           illustrationPrompt,
           updatedEpisode: '【初期プロット策定時】',
         };
       }),
       worldBuilding: rawWorld.map((w: any, idx: number) => {
         const title = (w.title || w.name || `設定${idx + 1}`).trim();
+        let content = (w.content || w.description || '').trim();
+        if (!content || NovelEngine.isSynopsisCopy(content, promptSettings, step1Parsed.synopsis)) {
+          content = `「${title}」に関する作中設定・詳細解説`;
+        }
         return {
           id: `wb-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
           category: w.category || NovelEngine.classifyCategory(title),
           title: title,
-          content: w.content || w.description || '初期プロットにて設定',
+          content: content,
           updatedEpisode: '【初期プロット策定時】',
         };
       }),
       geography: rawGeo.map((g: any, idx: number) => {
         const name = (g.name || g.title || `地名${idx + 1}`).trim();
+        let description = (g.description || g.content || '').trim();
+        if (!description || NovelEngine.isSynopsisCopy(description, promptSettings, step1Parsed.synopsis)) {
+          description = `「${name}」に関する舞台・地理の解説`;
+        }
         return {
           id: `geo-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
           name,
-          description: g.description || g.content || '初期プロットにて設定',
+          description: description,
           updatedEpisode: '【初期プロット策定時】',
         };
       }),
@@ -1175,7 +1217,10 @@ ${JSON.stringify(draftData, null, 2)}
       terms: rawTerms.map((t: any, idx: number) => {
         const term = (t.term || t.name || '').trim();
         const reading = NovelEngine.toHiragana(t.reading || t.ruby || '');
-        const description = t.description || t.meaning || t.content || '初期プロットにて設定された特殊用語';
+        let description = (t.description || t.meaning || t.content || '').trim();
+        if (!description || NovelEngine.isSynopsisCopy(description, promptSettings, step1Parsed.synopsis)) {
+          description = `「${term}」の意味・作中での定義解説`;
+        }
         return {
           id: `term-init-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
           term: term || '特殊用語',
@@ -2241,6 +2286,36 @@ ${draftContent.slice(0, 10000)}
   }
 
   /**
+   * 説明文やコンテンツがあらすじ文章のコピー・プロンプト全文になっていないか判定する
+   */
+  public static isSynopsisCopy(text: string, promptSettings?: PromptSettings, synopsis?: string): boolean {
+    if (!text || !text.trim()) return true;
+    const cleanText = text.trim();
+
+    if (/^(?:【あらすじ】|【詳細指定】|【重要命令】|【ストーリーコンセプト】|あらすじ[：:]|詳細指定[：:])/i.test(cleanText)) return true;
+    if (cleanText.includes('【あらすじ】') || cleanText.includes('【詳細指定】') || cleanText.includes('【重要命令】')) return true;
+
+    if (promptSettings?.detailedPrompt) {
+      const dp = promptSettings.detailedPrompt.trim();
+      if (cleanText === dp || (cleanText.length > 30 && dp.includes(cleanText))) return true;
+    }
+    if (promptSettings?.storyConcept) {
+      const sc = promptSettings.storyConcept.trim();
+      if (cleanText === sc || (cleanText.length > 30 && sc.includes(cleanText))) return true;
+    }
+    if (synopsis) {
+      const syn = synopsis.trim();
+      if (cleanText === syn || (cleanText.length > 30 && syn.includes(cleanText))) return true;
+    }
+
+    if (cleanText.length > 150 && (cleanText.startsWith('主人公は') || cleanText.startsWith('これは') || cleanText.includes('物語。'))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * 単なる台詞や文章断片（ゴミ設定）を除外する判定
    */
   public static isJunkTitle(title: string): boolean {
@@ -2252,18 +2327,18 @@ ${draftContent.slice(0, 10000)}
     if (/^\d+(?:\s*の\s*\d+)?$/i.test(clean)) return true;
     if (/^(?:第?\d+[話章節幕]|シーン\d+|[0-9]+)$/i.test(clean)) return true;
 
-    // メタ情報・プロンプト見出し用語の除外 (例: "本シーン登場", "あらすじ", "チェック対象", "登場人物")
-    if (/(?:本シーン|登場人物|概要|テーマ|あらすじ|前提|設定|登場時|これまでのあらすじ|作品テーマ|トーン|チェック対象|校閲対象|進行状態|全シーン|完成済み|新規追加)/.test(clean)) return true;
+    // メタ情報・プロンプト見出し用語・指示文キーワードの厳格除外 (例: "あらすじ", "詳細指定", "重要命令", "配役", "状態")
+    if (/(?:本シーン|登場人物|概要|テーマ|あらすじ|詳細指定|指定事項|最優先|必須|命令|ルール|順守|配役|状態|視点|前提|設定|登場時|これまでのあらすじ|作品テーマ|トーン|チェック対象|校閲対象|進行状態|全シーン|完成済み|新規追加|プロンプト|システム|ログ|連載構成|話数|文字数|レーティング|全年齢|成人向け|R18|R-18|初期プロット|作品タイトル|サブタイトル)/i.test(clean)) return true;
 
     // 「〜の部屋」「〜の比喩」「〜の件」などの文脈フレーズの除外
     if (/(?:の部屋|の比喩|の件|の話|のこと|の例え|の様子|の場所)$/.test(clean) && !/(?:王|姫|神|勇者|魔王|聖女|皇帝)/.test(clean)) return true;
 
-    // 記号や文章終わりの除外
-    if (/[。！？!?～…\n]/.test(clean)) return true;
-    if (/(?:休養中|残ってる|伝える|でした|ます|です|である|ている|ていた|について|こと|もの|から|まで|という|する|した|なる|なった|言った|思う|なさる|だろ|よね|ね|よ|な|さ)$/.test(clean)) return true;
-    if (/(?:は、|が、|を、|で、|に、)/.test(clean)) return true;
+    // 記号や文章終わりの除外 (です・ます調、助詞多用、読点、文末述語、あらすじ本文コピー)
+    if (/[。！？!?～…\n―─]/.test(clean)) return true;
+    if (/(?:休養中|残ってる|伝える|でした|ます|です|である|ている|ていた|について|こと|もの|から|まで|という|する|した|なる|なった|言った|思う|なさる|だろ|よね|ね|よ|な|さ|頂き|頂きます|ハンティング|日記)$/.test(clean)) return true;
+    if (/(?:は、|が、|を、|で、|に、|――)/.test(clean)) return true;
     const stripped = clean.replace(/[「」『』【】]/g, '');
-    if (stripped.length > 8 && /(?:は|が|を|で|に|の|へ|より|から|と)/.test(stripped) && !/(?:の|室|階|層|店|人|手|神|王|法|具|器|肉|書|服|物|館|街|島|山|川|海|湖|門|城|塔|兵|隊|組|派|家)/.test(stripped.slice(-1))) return true;
+    if (stripped.length > 6 && /(?:は|が|を|で|に|の|へ|より|から|と)/.test(stripped) && !/(?:の|室|階|層|店|人|手|神|王|法|具|器|肉|書|服|物|館|街|島|山|川|海|湖|門|城|塔|兵|隊|組|派|家)/.test(stripped.slice(-1))) return true;
     return false;
   }
 
@@ -2392,14 +2467,24 @@ ${draftContent.slice(0, 10000)}
    */
   public static cleanJunkSettings(
     bible: SettingBible,
-    glossary: Glossary
+    glossary: Glossary,
+    promptSettings?: PromptSettings,
+    synopsis?: string
   ): { cleanedBible: SettingBible; cleanedGlossary: Glossary; removedCount: number } {
     const cleanedBible: SettingBible = JSON.parse(JSON.stringify(bible));
     const cleanedGlossary: Glossary = JSON.parse(JSON.stringify(glossary));
     let removedCount = 0;
 
     const initialWbCount = cleanedBible.worldBuilding.length;
-    cleanedBible.worldBuilding = cleanedBible.worldBuilding.filter((w) => !this.isJunkTitle(w.title));
+    cleanedBible.worldBuilding = cleanedBible.worldBuilding
+      .filter((w) => !this.isJunkTitle(w.title))
+      .map((w) => {
+        let content = (w.content || '').trim();
+        if (this.isSynopsisCopy(content, promptSettings, synopsis)) {
+          content = `「${w.title.trim()}」に関する作中設定・詳細解説`;
+        }
+        return { ...w, content };
+      });
     removedCount += (initialWbCount - cleanedBible.worldBuilding.length);
 
     const initialCharCount = cleanedBible.characters.length;
@@ -2416,23 +2501,50 @@ ${draftContent.slice(0, 10000)}
           illustrationPrompt: c.illustrationPrompt,
         });
 
+        let background = (c.background || '').trim();
+        if (this.isSynopsisCopy(background, promptSettings, synopsis)) {
+          background = `「${cleanName}」の作中における人物背景・目的`;
+        }
+        let appearance = (c.appearance || '').trim();
+        if (this.isSynopsisCopy(appearance, promptSettings, synopsis)) {
+          appearance = `「${cleanName}」の外見・容姿特徴`;
+        }
+
         return {
           ...c,
           name: cleanName,
           role: c.role || extractedRole || '登場人物',
           firstPerson,
           secondPerson,
+          background,
+          appearance,
           illustrationPrompt,
         };
       });
     removedCount += (initialCharCount - cleanedBible.characters.length);
 
     const initialGeoCount = cleanedBible.geography.length;
-    cleanedBible.geography = cleanedBible.geography.filter((g) => !this.isJunkTitle(g.name));
+    cleanedBible.geography = cleanedBible.geography
+      .filter((g) => !this.isJunkTitle(g.name))
+      .map((g) => {
+        let description = (g.description || '').trim();
+        if (this.isSynopsisCopy(description, promptSettings, synopsis)) {
+          description = `「${g.name.trim()}」に関する舞台・地理の解説`;
+        }
+        return { ...g, description };
+      });
     removedCount += (initialGeoCount - cleanedBible.geography.length);
 
     const initialTermCount = cleanedGlossary.terms.length;
-    cleanedGlossary.terms = cleanedGlossary.terms.filter((t) => !this.isJunkTitle(t.term));
+    cleanedGlossary.terms = cleanedGlossary.terms
+      .filter((t) => !this.isJunkTitle(t.term))
+      .map((t) => {
+        let description = (t.description || '').trim();
+        if (this.isSynopsisCopy(description, promptSettings, synopsis)) {
+          description = `「${t.term.trim()}」の意味・作中での定義解説`;
+        }
+        return { ...t, description };
+      });
     removedCount += (initialTermCount - cleanedGlossary.terms.length);
 
     return { cleanedBible, cleanedGlossary, removedCount };

@@ -305,6 +305,55 @@ export class StoreManager {
   }
 
   /**
+   * 特定プロジェクトのお題キーワード（themes）のみをコピーして新規作品を複製登録
+   */
+  static duplicateProject(sourceId: string): Project {
+    const sourceProj = this.getProjectById(sourceId);
+    const sourceThemes = sourceProj?.promptSettings?.themes || ['ファンタジー', '冒険', '謎'];
+    const sourceTone = sourceProj?.promptSettings?.tone || 'ライトノベル・ファンタジー';
+    const sourceTargetAudience = sourceProj?.promptSettings?.targetAudience || '全年齢ファンタジー読者';
+    const sourceTargetChapterCount = sourceProj?.promptSettings?.targetChapterCount || 12;
+    const sourceTargetWordCount = sourceProj?.promptSettings?.targetWordCount || 100000;
+    const sourceRating = sourceProj?.promptSettings?.rating || 'all';
+
+    const baseTitle = sourceProj?.novelData?.title || sourceProj?.title || '新規作品';
+
+    const newProj: Project = {
+      id: `proj-${Date.now()}`,
+      title: `${baseTitle} (複製)`,
+      createdDate: new Date().toLocaleDateString(),
+      lastUpdatedDate: new Date().toLocaleDateString(),
+      promptSettings: {
+        themes: [...sourceThemes],
+        storyConcept: '',
+        detailedPrompt: '',
+        tone: sourceTone,
+        targetAudience: sourceTargetAudience,
+        targetChapterCount: sourceTargetChapterCount,
+        targetWordCount: sourceTargetWordCount,
+        rating: sourceRating,
+      },
+      bible: {
+        characters: [],
+        worldBuilding: [],
+        geography: [],
+      },
+      glossary: {
+        terms: [],
+        rubies: [],
+      },
+      novelData: null,
+    };
+
+    const projects = this.getProjects();
+    const updatedList = [newProj, ...projects];
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updatedList));
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_PROJECT_ID, newProj.id);
+    syncToDisk(updatedList);
+    return newProj;
+  }
+
+  /**
    * 共通 AI 設定
    */
   static getAISettings(): AISettings {

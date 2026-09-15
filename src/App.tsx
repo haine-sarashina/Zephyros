@@ -168,6 +168,15 @@ export function App() {
     setActiveTab('prompt');
   };
 
+  const handleDuplicateProject = (projectId: string) => {
+    const newProj = StoreManager.duplicateProject(projectId);
+    const updatedProjects = StoreManager.getProjects();
+    setProjects(updatedProjects);
+    setActiveProjectId(newProj.id);
+    // お題複製時も直ちにお題設定タブへ遷移し、あらすじガチャを行える状態にする
+    setActiveTab('prompt');
+  };
+
   const handleDeleteProject = (projectId: string) => {
     StoreManager.deleteProject(projectId);
     const updatedProjects = StoreManager.getProjects();
@@ -281,6 +290,7 @@ export function App() {
             activeProjectId={activeProjectId}
             onSelectProject={handleSelectProject}
             onCreateNewProject={handleCreateNewProject}
+            onDuplicateProject={handleDuplicateProject}
             onDeleteProject={handleDeleteProject}
             onUpdateNovelData={handleSaveNovelData}
             onNavigateToTab={(tab) => setActiveTab(tab)}

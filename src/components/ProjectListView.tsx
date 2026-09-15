@@ -8,6 +8,7 @@ interface ProjectListViewProps {
   activeProjectId: string | null;
   onSelectProject: (projectId: string) => void;
   onCreateNewProject: () => void;
+  onDuplicateProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onUpdateNovelData: (data: NovelData) => void;
   onNavigateToTab: (tab: ActiveTab) => void;
@@ -18,6 +19,7 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({
   activeProjectId,
   onSelectProject,
   onCreateNewProject,
+  onDuplicateProject,
   onDeleteProject,
   onUpdateNovelData,
   onNavigateToTab,
@@ -167,24 +169,38 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({
               >
                 <div className="space-y-2">
                   <div className="flex justify-between items-start">
-                    <h4 className="font-bold text-base text-slate-100 line-clamp-1">
+                    <h4 className="font-bold text-base text-slate-100 line-clamp-1 flex-1 mr-2">
                       {proj.novelData?.title || proj.title || '無題作品'}
                     </h4>
 
-                    {projects.length > 1 && (
+                    <div className="flex items-center space-x-1 shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`作品「${proj.title}」を削除しますか？`)) {
-                            onDeleteProject(proj.id);
-                          }
+                          onDuplicateProject(proj.id);
                         }}
-                        className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                        title="作品削除"
+                        className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-indigo-950 hover:text-indigo-300 text-slate-400 border border-slate-700/60 hover:border-indigo-600 transition-colors flex items-center space-x-1 text-xs"
+                        title="お題のキーワードのみをコピーして新規作品を複製登録します"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Copy className="w-3.5 h-3.5" />
+                        <span className="text-[11px] font-medium hidden sm:inline">複製</span>
                       </button>
-                    )}
+
+                      {projects.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`作品「${proj.title}」を削除しますか？`)) {
+                              onDeleteProject(proj.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950 hover:text-rose-400 text-slate-400 border border-slate-700/60 hover:border-rose-800 transition-colors"
+                          title="作品削除"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed font-sans min-h-[32px]">

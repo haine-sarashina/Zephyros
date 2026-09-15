@@ -23,8 +23,9 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 【厳格出力ルール】
 1. 思考プロセス(<think>)、前置き・解説テキスト、Markdown装飾は含めず、純粋なJSONオブジェクトのみを出力してください。
 2. JSONの文字列値内部でダブルクォーテーション（"）を使用する場合は、必ず 「 」 カギカッコに置き換えるか \\" にエスケープしてください。
-3. **登場人物（characters）は必ず『主人公』『メインヒロイン（1〜2名）』『サブキャラクター/ライバル/仲間（1〜2名）』を含め、合計 3〜5 名を作成してください。主人公1名のみの出力は絶対禁止です。**
-4. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
+3. **作品タイトル（title）は10〜25文字程度の短く魅力的な書籍タイトルを作成してください。あらすじ本文や指定文（例: 『主人公は女子高生のサキュバスで〜〜』）をそのままタイトルに設定することは絶対禁止です。**
+4. **登場人物（characters）はユーザーの【詳細指定】に書かれた性別・立場・配役・状態（女性主人公なら性別・一人称「私」等）を完璧に尊重し、合計 3〜5 名を作成してください。主人公の性別や設定を勝手に男性等に改変することは絶対禁止です。**
+5. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -192,8 +193,9 @@ export const R18_SYSTEM_PROMPTS: SystemPrompts = {
 【厳格出力ルール】
 1. 思考プロセス(<think>)、前置き・解説テキスト、Markdown装飾は含めないでください。
 2. JSONの文字列値内部でダブルクォーテーション（"）を使用する場合は、必ず 「 」 カギカッコに置き換えるか \\" にエスケープしてください。
-3. **登場人物（characters）は必ず『主人公』『メインヒロイン（1〜2名）』『サブキャラクター/ライバル/仲間（1〜2名）』を含め、合計 3〜5 名を作成してください。主人公1名のみの出力は絶対禁止です。**
-4. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
+3. **作品タイトル（title）は10〜25文字程度の短く魅力的な書籍タイトルを作成してください。あらすじ本文や指定文（例: 『主人公は女子高生のサキュバスで〜〜』）をそのままタイトルに設定することは絶対禁止です。**
+4. **登場人物（characters）はユーザーの【詳細指定】に書かれた性別・立場・配役・状態（女性主人公なら性別・一人称「私」等）を完璧に尊重し、合計 3〜5 名を作成してください。主人公の性別や設定を勝手に男性等に改変することは絶対禁止です。**
+5. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -563,7 +565,7 @@ export class NovelEngine {
    */
   private static extractArrayFromRawJson<T = any>(rawText: string, keyNames: string[]): T[] {
     for (const key of keyNames) {
-      const arrayRegex = new RegExp(`"${key}"\\s*:\\s*(\\[[\\s\\S]*?\\])(?:\\s*,|\\s*\\})`, 'i');
+      const arrayRegex = new RegExp(`"?${key}"?\\s*:\\s*(\\[[\\s\\S]*?\\])(?:\\s*,|\\s*\\}|\\s*$)`, 'i');
       const match = rawText.match(arrayRegex);
       if (match && match[1]) {
         try {
@@ -585,8 +587,106 @@ export class NovelEngine {
           if (items.length > 0) return items as T[];
         }
       }
+
+      // フォールバック: key:... からのブロック直接検索
+      const keyIndex = rawText.search(new RegExp(`"?${key}"?\\s*:`, 'i'));
+      if (keyIndex !== -1) {
+        const sub = rawText.slice(keyIndex);
+        const itemMatches = sub.matchAll(/\{[\s\S]*?\}/g);
+        const items: any[] = [];
+        let count = 0;
+        for (const im of itemMatches) {
+          if (count++ > 15) break;
+          try {
+            const itemParsed = this.cleanAndParseJson(im[0]);
+            if (itemParsed && typeof itemParsed === 'object' && (itemParsed.name || itemParsed.title || itemParsed.term || itemParsed.kanji)) {
+              items.push(itemParsed);
+            }
+          } catch (_) {}
+        }
+        if (items.length > 0) return items as T[];
+      }
     }
     return [];
+  }
+
+  /**
+   * ユーザープロンプト（ストーリーコンセプト・詳細指定）から性別・立場・相手役・状態を解析して登場人物を動的推論
+   */
+  private static inferCharactersFromPrompt(promptSettings: PromptSettings): any[] {
+    const fullText = `${promptSettings.storyConcept}\n${promptSettings.detailedPrompt}`;
+    const chars: any[] = [];
+
+    const isFemaleProtagonist = /サキュバス|女子高生|少女|女性|彼女|美少女|姉|妹|母|娘|姫|女騎士|魔女|聖女|女主人公/.test(fullText);
+
+    if (isFemaleProtagonist) {
+      let mainName = 'サキュバスの少女';
+      if (fullText.includes('サキュバス')) mainName = '女子高生サキュバス';
+
+      chars.push({
+        name: mainName,
+        ruby: 'しゅじんこう',
+        role: '主人公',
+        firstPerson: '私',
+        secondPerson: 'あなた',
+        appearance: promptSettings.detailedPrompt ? promptSettings.detailedPrompt.slice(0, 100) : '魅力的な容姿の少女主人公',
+        personality: '作中の詳細指定に基づく性格',
+        background: promptSettings.detailedPrompt || promptSettings.storyConcept,
+        illustrationPrompt: '1girl, succubus, high school girl, anime style character',
+      });
+    } else {
+      chars.push({
+        name: '主人公',
+        ruby: 'しゅじんこう',
+        role: '主人公',
+        firstPerson: '俺',
+        secondPerson: '君',
+        appearance: '物語の主人公',
+        personality: '情熱的で真っ直ぐな性格',
+        background: promptSettings.detailedPrompt || promptSettings.storyConcept,
+        illustrationPrompt: '1boy, anime style character',
+      });
+    }
+
+    if (/寝ている|睡眠|被害者|ターゲット|無抵抗|犠牲/.test(fullText)) {
+      chars.push({
+        name: '被害者の男性',
+        ruby: 'ひがいしゃ',
+        role: '被害者・相手役',
+        firstPerson: '僕',
+        secondPerson: '君',
+        appearance: 'ベッドで静かに眠っている無抵抗な男性',
+        personality: '作中の設定に基づく対象人物',
+        background: '主人公のターゲットとなる人物',
+        illustrationPrompt: '1boy, sleeping, anime style character',
+      });
+    } else if (isFemaleProtagonist) {
+      chars.push({
+        name: '相手役の男性',
+        ruby: 'あいてやく',
+        role: 'メインキャラクター',
+        firstPerson: '俺',
+        secondPerson: '君',
+        appearance: '主人公と深く関わる人物',
+        personality: '作中の設定に基づく人物',
+        background: promptSettings.storyConcept,
+        illustrationPrompt: '1boy, anime style character',
+      });
+    } else {
+      chars.push({
+        name: 'メインヒロイン',
+        ruby: 'ひろいん',
+        role: 'メインヒロイン',
+        firstPerson: '私',
+        secondPerson: 'あなた',
+        appearance: '容姿端麗なヒロイン',
+        personality: '主人公と深く関わる人物',
+        background: promptSettings.storyConcept,
+        illustrationPrompt: '1girl, anime style character',
+      });
+    }
+
+    return chars;
   }
 
   /**
@@ -907,44 +1007,102 @@ ${this.buildBibleContext(bible, glossary)}
     if (!Array.isArray(rawTerms)) rawTerms = [];
     if (!Array.isArray(rawRubies)) rawRubies = [];
 
-    // もしLLM出力の登場人物が不足している場合のフェールセーフ（ヒロイン・サブキャラ補完）
+    // タイトルのクリーンアップ（長すぎる場合や指定文ママの場合は整形）
+    let cleanTitle = (step1Parsed.title || '').trim();
+    if (
+      !cleanTitle ||
+      cleanTitle.length > 35 ||
+      cleanTitle === promptSettings.detailedPrompt ||
+      cleanTitle === promptSettings.storyConcept ||
+      cleanTitle.startsWith('主人公は') ||
+      cleanTitle.startsWith('これは') ||
+      cleanTitle.includes('\n')
+    ) {
+      const candidate = (promptSettings.storyConcept || promptSettings.detailedPrompt || '').split(/[\n。！？]/)[0].trim();
+      cleanTitle = candidate.length > 0 && candidate.length <= 25 ? candidate : `${promptSettings.themes.join('×')}の物語`;
+    }
+    step1Parsed.title = cleanTitle;
+
+    // 登場人物不足時のフェールセーフ（プロンプトからの性別・役職・背景動的解析）
     if (rawChars.length < 2) {
+      const inferred = NovelEngine.inferCharactersFromPrompt(promptSettings);
       if (rawChars.length === 0) {
-        rawChars.push({
-          name: '主人公',
-          ruby: 'しゅじんこう',
-          role: '主人公',
-          firstPerson: '俺',
-          secondPerson: '君',
-          appearance: '物語の主人公',
-          personality: '情熱的で真っ直ぐな性格',
-          background: promptSettings.storyConcept || '作品の主人公',
+        rawChars = inferred;
+      } else {
+        inferred.forEach((inf) => {
+          if (!rawChars.some((c) => (c.name || '').includes(inf.name) || (c.role || '').includes(inf.role))) {
+            rawChars.push(inf);
+          }
         });
       }
-      if (!rawChars.some((c) => (c.role || '').includes('ヒロイン'))) {
-        rawChars.push({
-          name: 'ヒロイン',
-          ruby: 'ひろいん',
-          role: 'メインヒロイン',
-          firstPerson: '私',
-          secondPerson: 'あなた',
-          appearance: '容姿端麗で印象的なヒロイン',
-          personality: '主人公と深く関わるヒロイン',
-          background: promptSettings.storyConcept || '物語のキーパーソン',
+    }
+
+    // 世界観設定の補完
+    if (rawWorld.length === 0) {
+      promptSettings.themes.forEach((t) => {
+        if (t.trim()) {
+          rawWorld.push({
+            title: t.trim(),
+            category: 'culture',
+            content: `お題「${t.trim()}」に関連する主要設定`,
+          });
+        }
+      });
+      const bracketMatches = Array.from((promptSettings.detailedPrompt || '').matchAll(/『([^』]+)』/g));
+      bracketMatches.forEach((m) => {
+        const item = m[1].trim();
+        if (item && !rawWorld.some((w) => w.title === item)) {
+          rawWorld.push({
+            title: item,
+            category: 'other',
+            content: `詳細指定より抽出された設定項目「${item}」`,
+          });
+        }
+      });
+    }
+
+    // 地理・地名の補完
+    if (rawGeo.length === 0) {
+      const cornerMatches = Array.from((promptSettings.detailedPrompt || '').matchAll(/【([^】]+)】/g));
+      cornerMatches.forEach((m) => {
+        const place = m[1].trim();
+        if (place && !place.includes('話') && !rawGeo.some((g) => g.name === place)) {
+          rawGeo.push({
+            name: place,
+            description: `詳細指定より抽出された舞台「${place}」`,
+          });
+        }
+      });
+      if (rawGeo.length === 0) {
+        rawGeo.push({
+          name: '物語の主要舞台',
+          description: promptSettings.storyConcept || '物語の劇中舞台',
         });
       }
-      if (rawChars.length < 3) {
-        rawChars.push({
-          name: 'サブキャラクター',
-          ruby: 'さぶきゃらくたー',
-          role: '仲間・協力者',
-          firstPerson: '僕',
-          secondPerson: 'お前',
-          appearance: '特徴的な外見',
-          personality: '賑やかで頼りになる性格',
-          background: '作中の事件や日常に関わる人物',
+    }
+
+    // 用語の補完
+    if (rawTerms.length === 0) {
+      promptSettings.themes.forEach((t) => {
+        if (t.trim()) {
+          rawTerms.push({
+            term: t.trim(),
+            reading: NovelEngine.toHiragana(t.trim()),
+            description: `お題「${t.trim()}」`,
+          });
+        }
+      });
+    }
+
+    // ルビの補完
+    if (rawRubies.length === 0) {
+      const rubyMatches = Array.from((promptSettings.detailedPrompt || '').matchAll(/([一-龠+々ヶ]+)《([^》]+)》/g));
+      rubyMatches.forEach((m) => {
+        rawRubies.push({
+          kanji: m[1].trim(),
+          ruby: NovelEngine.toHiragana(m[2].trim()),
         });
-      }
+      });
     }
 
     const initialBible: SettingBible = {

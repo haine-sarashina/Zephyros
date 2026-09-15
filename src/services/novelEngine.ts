@@ -916,8 +916,8 @@ ${JSON.stringify(draftData, null, 2)}
     writerModel: string,
     _editorModel: string,
     promptSettings: PromptSettings,
-    bible: SettingBible,
-    glossary: Glossary,
+    _bible: SettingBible,
+    _glossary: Glossary,
     onProgress?: (msg: string) => void,
     signal?: AbortSignal,
     aiSettings?: any
@@ -942,21 +942,22 @@ ${JSON.stringify(draftData, null, 2)}
 【詳細指定】: ${promptSettings.detailedPrompt}
 【トーン】: ${promptSettings.tone}
 【想定読者】: ${promptSettings.targetAudience}
-
-${this.buildBibleContext(bible, glossary)}
+【作品レーティング】: ${promptSettings.rating === 'r18' ? 'R-18成人向け（二次元ドリーム文庫風・官能・性愛テーマ）' : '全年齢向け'}
 
 【重要命令】:
-1. 物語の『主人公』に加えて、作品を彩る『メインヒロイン（1〜2名）』や『サブキャラクター/仲間/ライバル』を必ず含め、合計 3〜5 名の魅力的な登場人物（characters）を作成してください。主人公1名のみの作成は禁止します。
-2. 世界観設定（worldBuilding 3〜5件）、地名（geography 2〜4件）、特殊用語（terms 3〜5件）、ルビ表記（rubies 3〜5件）も必ず全て充実させて作成してください。
+1. 作品タイトル（title）は10〜25文字程度の短く魅力的な【今回のお題（${promptSettings.themes.join(', ')}）専用の新しい書籍タイトル】を作成してください。過去の他作品のタイトルや【詳細指定】の文章全体をそのままコピーすることは絶対禁止です。必ず今回のお題キーワードに合わせたオリジナルタイトルにしてください。
+2. 【詳細指定】に書かれた登場人物の性別・立場・配役・状態（女性主人公なら性別・一人称「私」等）を100%絶対順守し、主人公を勝手に男性等に改変することは絶対禁止です。
+3. 物語の『主人公』に加えて、作品を彩る『メインヒロイン/相手役（1〜2名）』や『サブキャラクター/仲間/ライバル』を必ず含め、合計 3〜5 名の魅力的な登場人物（characters）を作成してください。主人公1名のみの作成は禁止します。
+4. 世界観設定（worldBuilding 3〜5件）、地名（geography 2〜4件）、特殊用語（terms 3〜5件）、ルビ表記（rubies 3〜5件）も必ず全て充実させて作成してください。
 
-上記を踏まえ、全${targetChapterCount}話構成の作品タイトル・全体あらすじ・初期設定資料集を作成してください。`;
+上記を踏まえ、全${targetChapterCount}話構成の新規作品タイトル・全体あらすじ・初期設定資料集を作成してください。`;
 
     let step1Raw = '';
     try {
-      step1Raw = await OllamaService.chat(baseUrl, writerModel, step1System, step1User, 0.3, signal, true, aiSettings);
+      step1Raw = await OllamaService.chat(baseUrl, writerModel, step1System, step1User, 0.75, signal, true, aiSettings);
     } catch (e: any) {
       if (signal?.aborted) throw e;
-      step1Raw = await OllamaService.chat(baseUrl, writerModel, step1System, step1User, 0.4, signal, false, aiSettings);
+      step1Raw = await OllamaService.chat(baseUrl, writerModel, step1System, step1User, 0.75, signal, false, aiSettings);
     }
 
     let step1Parsed: any = {};
@@ -1007,8 +1008,20 @@ ${this.buildBibleContext(bible, glossary)}
     if (!Array.isArray(rawTerms)) rawTerms = [];
     if (!Array.isArray(rawRubies)) rawRubies = [];
 
-    // タイトルのクリーンアップ（長すぎる場合や指定文ママの場合は整形）
+    // お題・コンセプト内の主要単語リスト
+    const promptKeywords = [
+      ...promptSettings.themes,
+      ...(promptSettings.storyConcept || '').split(/[\s,、。]/),
+      ...(promptSettings.detailedPrompt || '').split(/[\s,、。]/),
+    ].map((k) => k.trim()).filter((k) => k.length >= 2);
+
+    // タイトルのクリーンアップ（長すぎる場合・指定文ママ・無関係タイトルの場合は再生成）
     let cleanTitle = (step1Parsed.title || '').trim();
+    const isUnrelatedTitle =
+      promptKeywords.length > 0 &&
+      cleanTitle.length > 0 &&
+      !promptKeywords.some((kw) => cleanTitle.includes(kw) || kw.includes(cleanTitle));
+
     if (
       !cleanTitle ||
       cleanTitle.length > 35 ||
@@ -1016,10 +1029,17 @@ ${this.buildBibleContext(bible, glossary)}
       cleanTitle === promptSettings.storyConcept ||
       cleanTitle.startsWith('主人公は') ||
       cleanTitle.startsWith('これは') ||
-      cleanTitle.includes('\n')
+      cleanTitle.includes('\n') ||
+      isUnrelatedTitle
     ) {
       const candidate = (promptSettings.storyConcept || promptSettings.detailedPrompt || '').split(/[\n。！？]/)[0].trim();
-      cleanTitle = candidate.length > 0 && candidate.length <= 25 ? candidate : `${promptSettings.themes.join('×')}の物語`;
+      if (candidate.length > 0 && candidate.length <= 25 && !candidate.startsWith('主人公は')) {
+        cleanTitle = candidate;
+      } else if (promptSettings.storyConcept) {
+        cleanTitle = promptSettings.storyConcept.slice(0, 22);
+      } else {
+        cleanTitle = `${promptSettings.themes.join('×')}の物語`;
+      }
     }
     step1Parsed.title = cleanTitle;
 

@@ -171,8 +171,9 @@ export class OllamaService {
         temperature,
         top_p: 0.9,
         top_k: 40,
-        repeat_penalty: 1.05,
-        repeat_last_n: 64,
+        repeat_penalty: 1.18,
+        repeat_last_n: 256,
+        presence_penalty: 0.3,
         num_ctx: 32768,
         num_predict: 16384,
       }
@@ -256,8 +257,9 @@ export class OllamaService {
         temperature,
         top_p: 0.9,
         top_k: 40,
-        repeat_penalty: 1.05,
-        repeat_last_n: 64,
+        repeat_penalty: 1.18,
+        repeat_last_n: 256,
+        presence_penalty: 0.3,
         num_ctx: 32768,
         num_predict: 16384,
       }

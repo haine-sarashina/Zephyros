@@ -84,7 +84,8 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
    - ルビは『ひらがな』だけでなく、『火球魔法《ファイアーボール》』『聖剣《エクスカリバー》』のようにカタカナのルビも使用可能です。
    - ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。
 9. **ユーザー詳細指定・配役・状態の絶対順守**: 【ユーザー詳細あらすじ・指定事項】および設定資料集に記述された「誰が主人公/行動の主導者か」「登場人物の状態（寝ている/行動不能/気絶中など）」を100%厳格に守り、主導権や立場、人物の意識状態（寝ているのを勝手に起こす等）をAIの都合で勝手に変更・逆転させないでください。
-10. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。純粋な日本語の小説本文のみを出力してください。`,
+10. **前置き・メタ解説・カッコメモの絶対禁止**: 「（※ここでは〜〜）」、「以下が〜〜の本文です」、「【シーン2】」といった前置き解説、メタメモ、見出しテキストは絶対に含めないでください。本文の1文字目から純粋な日本語の小説本文（地の文または会話文）のみを出力してください。
+11. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。`,
 
   proofreadScene: `あなたは文芸誌のベテラン編集者（校閲エディター）です。
 出来上がった原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
@@ -260,7 +261,8 @@ export const R18_SYSTEM_PROMPTS: SystemPrompts = {
 7. 設定資料集に登録されている口調・一人称・二人称・人間関係・性的嗜好を厳格に守ってください。
 8. 特殊用語辞典に登録されている造語やルビ表記（例: 異世界《いせかい》）を積極的に活用してください。
 9. **ユーザー詳細指定・配役・状態の絶対順守**: 【ユーザー詳細あらすじ・指定事項】および設定資料集に記述された「誰が主人公/行動の主導者か」「登場人物の状態（寝ている/行動不能/気絶中など）」を100%厳格に守り、主導権や立場、人物の意識状態（寝ているのを勝手に起こす等）をAIの都合で勝手に変更・逆転させないでください。
-10. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。純粋な日本語の成人向け小説本文のみを出力してください。`,
+10. **前置き・メタ解説・カッコメモの絶対禁止**: 「（※ここでは〜〜）」、「以下が〜〜の本文です」、「【シーン2】」といった前置き解説、メタメモ、見出しテキストは絶対に含めないでください。本文の1文字目から純粋な日本語の成人向け小説本文（地の文または会話文）のみを出力してください。
+11. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。`,
 
   proofreadScene: `あなたは成人向けライトノベル文芸誌のベテラン編集者（校閲エディター）です。
 出来上がったR-18二次元ドリーム文庫風原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
@@ -1540,10 +1542,13 @@ ${chapterSummaries}
 
     const systemPrompt = NovelEngine.resolveSystemPrompt('writeSceneContent', promptSettings, aiSettings);
 
-    // 以前の文脈にJSONが混入していないか安全クレンジング
-    const cleanPrevSummary = previousContextSummary && !NovelEngine.isJsonOutput(previousContextSummary)
-      ? previousContextSummary
+    // 以前の文脈にJSONが混入していないか安全クレンジング & 直近800字に制限してコンテキスト溢れを防止
+    let cleanPrevSummary = previousContextSummary && !NovelEngine.isJsonOutput(previousContextSummary)
+      ? previousContextSummary.trim()
       : '';
+    if (cleanPrevSummary.length > 800) {
+      cleanPrevSummary = `... ${cleanPrevSummary.slice(-800)}`;
+    }
 
     const cleanConcept = NovelEngine.sanitizePromptConcept(promptSettings.storyConcept);
     const userPrompt = `【作品テーマ/トーン】: ${cleanConcept} (${promptSettings.tone})
@@ -1573,6 +1578,13 @@ ${this.buildBibleContext(bible, glossary)}
       false,
       aiSettings
     );
+
+    // デジェネレーション（反復ループ）の検知とクレンジング
+    const initDegen = NovelEngine.detectAndFixDegeneration(raw);
+    if (initDegen.hasDegeneration) {
+      console.warn('[writeSceneContent] Initial pass degeneration loop detected:', initDegen.reasons);
+      raw = initDegen.cleanedText;
+    }
 
     // JSON出力誤爆の堅牢な検知＆リカバリ再呼び出し (最大2回)
     let isJson = NovelEngine.isJsonOutput(raw);
@@ -1607,6 +1619,14 @@ ${this.buildBibleContext(bible, glossary)}
     let autoPasses = 0;
     const maxAutoPasses = 3;
     while (raw.length < Math.round(targetWordsPerScene * 0.9) && autoPasses < maxAutoPasses && !signal?.aborted) {
+      // 途中で反復ループが発生した場合は継続を停止
+      const passDegen = NovelEngine.detectAndFixDegeneration(raw);
+      if (passDegen.hasDegeneration) {
+        console.warn('[writeSceneContent] Stopping auto-continuation due to degeneration loop:', passDegen.reasons);
+        raw = passDegen.cleanedText;
+        break;
+      }
+
       autoPasses++;
       const currentLen = raw.length;
       console.log(`[writeSceneContent] Continuation Pass ${autoPasses}: Length is ${currentLen} chars / Target ${targetWordsPerScene} chars. Auto-continuing stream...`);
@@ -1839,6 +1859,11 @@ ${cleanOriginalDraft}
     if (!text) return '';
     let sanitized = NovelEngine.decodeUtf8HexEscapes(text).trim();
 
+    // 0. 冒頭の文字化け記号（）やメタ解説カッコ・前置き指示文の自動クレンジング
+    sanitized = sanitized.replace(/[\uFFFD\uFFFE\uFFFF]/g, '');
+    sanitized = sanitized.replace(/^[\s\r\n]*[（\(][※*]?\s*(?:ここでは|物語上の|シーン|第\d+話)[^）\)]*[）\)]\s*/gi, '');
+    sanitized = sanitized.replace(/^[\s\r\n]*【(?:執筆対象|シーン|第\d+話|本文)[^】]*】\s*/gi, '');
+
     // 1. 未閉じルビ 《ルビ の自動補正 (例: 夕暮れ《ゆうぐれ -> 夕暮れ《ゆうぐれ》)
     sanitized = sanitized.replace(/(《[^》\r\n]+)(?=[。、！？\r\n\s]|$)/g, '$1》');
 
@@ -1897,9 +1922,12 @@ ${cleanOriginalDraft}
       return { hasDegeneration: false, cleanedText: text, reasons: [] };
     }
 
-    // 1. 同一フレーズ反復ループ（6文字以上の連続重複パターン）の検知と切除
-    const minLoopLen = 6;
-    for (let len = 15; len >= minLoopLen; len--) {
+    // 0. 文字化け記号（）の除去
+    cleaned = cleaned.replace(/[\uFFFD\uFFFE\uFFFF]/g, '');
+
+    // 1. 同一フレーズ反復ループ（2〜35文字の連続重複パターン）の検知と切除
+    const minLoopLen = 2;
+    for (let len = 35; len >= minLoopLen; len--) {
       for (let i = 0; i < cleaned.length - len * 2; i++) {
         const sub = cleaned.substring(i, i + len);
         if (/^[、。・\s]+$/.test(sub)) continue;
@@ -1911,10 +1939,11 @@ ${cleanOriginalDraft}
           nextPos += len;
         }
 
-        if (repeatCount >= 3) {
+        const threshold = len <= 4 ? 4 : 3;
+        if (repeatCount >= threshold) {
           hasDegeneration = true;
           reasons.push(`同一フレーズ反復ループ検出 ("${sub.slice(0, 15)}..." が${repeatCount}回出現)`);
-          cleaned = cleaned.substring(0, i + len);
+          cleaned = cleaned.substring(0, i + len).trim();
           break;
         }
       }

@@ -15,6 +15,7 @@ import { SettingBibleView } from './components/SettingBibleView';
 import { GlossaryView } from './components/GlossaryView';
 import { AISettingsView } from './components/AISettingsView';
 import { GeneratorView } from './components/GeneratorView';
+import { ObsidianSyncService } from './services/obsidianSyncService';
 import './App.css';
 
 interface AppWindowState {
@@ -159,11 +160,21 @@ export function App() {
     StoreManager.setActiveProjectId(projectId);
   };
 
+  // Obsidian Vault への自動同期ヘルパー
+  const autoSyncObsidian = (project: Project) => {
+    if (aiSettings?.obsidianVaultPath && project) {
+      ObsidianSyncService.syncProject(aiSettings.obsidianVaultPath, project).catch((err) => {
+        console.warn('Auto sync to Obsidian failed:', err);
+      });
+    }
+  };
+
   const handleCreateNewProject = () => {
     const newProj = StoreManager.createNewProject();
     const updatedProjects = StoreManager.getProjects();
     setProjects(updatedProjects);
     setActiveProjectId(newProj.id);
+    autoSyncObsidian(newProj);
     // 新規作成時にお題設定タブへ自動遷移！
     setActiveTab('prompt');
   };
@@ -173,6 +184,7 @@ export function App() {
     const updatedProjects = StoreManager.getProjects();
     setProjects(updatedProjects);
     setActiveProjectId(newProj.id);
+    autoSyncObsidian(newProj);
     // お題複製時も直ちにお題設定タブへ遷移し、あらすじガチャを行える状態にする
     setActiveTab('prompt');
   };
@@ -217,6 +229,7 @@ export function App() {
     const updated = { ...current, promptSettings: newSettings };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
+    autoSyncObsidian(updated);
   };
 
   const handleSaveBible = (newBible: SettingBible, projectId?: string) => {
@@ -225,6 +238,7 @@ export function App() {
     const updated = { ...current, bible: newBible };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
+    autoSyncObsidian(updated);
   };
 
   const handleSaveGlossary = (newGlossary: Glossary, projectId?: string) => {
@@ -233,6 +247,7 @@ export function App() {
     const updated = { ...current, glossary: newGlossary };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
+    autoSyncObsidian(updated);
   };
 
   const handleSaveBibleAndGlossary = (newBible: SettingBible, newGlossary: Glossary, projectId?: string) => {
@@ -241,6 +256,7 @@ export function App() {
     const updated = { ...current, bible: newBible, glossary: newGlossary };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
+    autoSyncObsidian(updated);
   };
 
   const handleSaveNovelData = (newNovelData: NovelData, projectId?: string) => {
@@ -253,6 +269,7 @@ export function App() {
     };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
+    autoSyncObsidian(updated);
   };
 
   const handleSaveEditorLogs = (logs: string[], projectId?: string) => {
@@ -261,12 +278,22 @@ export function App() {
     const updated = { ...current, editorLogs: logs };
     StoreManager.saveProject(updated);
     setProjects(StoreManager.getProjects());
+    autoSyncObsidian(updated);
   };
 
   const handleSaveAISettings = (newAISettings: AISettings) => {
     setAiSettings(newAISettings);
     StoreManager.saveAISettings(newAISettings);
     checkOllamaStatus();
+
+    if (newAISettings.obsidianVaultPath) {
+      const allProjects = StoreManager.getProjects();
+      allProjects.forEach((p) => {
+        ObsidianSyncService.syncProject(newAISettings.obsidianVaultPath!, p).catch((e) => {
+          console.warn(`Obsidian sync failed for project ${p.id}:`, e);
+        });
+      });
+    }
   };
 
   return (

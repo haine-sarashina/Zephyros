@@ -165,6 +165,20 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
           setStreamingTextState((prev) => {
             const next = prev + textToAdd;
             currentSession.streamingText = next;
+
+            // リアルタイム無限ループ (デジェネレーション) 検知
+            if (next.length > 300) {
+              const degenCheck = NovelEngine.detectAndFixDegeneration(next);
+              if (degenCheck.hasDegeneration && currentSession.abortController && !currentSession.abortController.signal.aborted) {
+                console.warn('[Realtime Degen Detected] Aborting stream early:', degenCheck.reasons);
+                setEditorLog((prevLogs) => [
+                  ...prevLogs,
+                  `[リアルタイム自動回避] 生成文章の無限ループ (${degenCheck.reasons.join(' / ')}) を検知したため、ストリーミングを早期自動中断・クレンジングしました。`
+                ]);
+                currentSession.abortController.abort();
+              }
+            }
+
             return next;
           });
         }
@@ -185,10 +199,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
     setEditorLogState(currentLogs);
     session.editorLog = currentLogs;
 
-    if (!session.isGenerating) {
-      session.streamingText = '';
-      session.currentStatus = '待機中';
-      setStreamingTextState('');
+    if (!session.isGenerating && !session.streamingText) {
       setCurrentStatusState('待機中');
     }
   }, [projectId, editorLogs, novelData?.title]);
@@ -797,10 +808,10 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
       currentSession.abortController.abort();
     }
     if (aiSettings.writerModel) {
-      await OllamaService.stopModel(aiSettings.writerModel);
+      await OllamaService.stopModel(aiSettings.writerModel, aiSettings.ollamaUrl);
     }
     if (aiSettings.editorModel && aiSettings.editorModel !== aiSettings.writerModel) {
-      await OllamaService.stopModel(aiSettings.editorModel);
+      await OllamaService.stopModel(aiSettings.editorModel, aiSettings.ollamaUrl);
     }
     setEditorLog((prev) => [...prev, '[システム] 停止シグナルを送信し、OllamaのGPU推論処理を即時に強制切断しました。']);
   };
@@ -945,6 +956,10 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
               <>
                 {streamingText}
                 <div ref={streamingEndRef} />
+              </>
+            ) : currentNovelData?.chapters[activeChapterIndex]?.scenes[activeSceneIndex]?.content ? (
+              <>
+                {currentNovelData.chapters[activeChapterIndex].scenes[activeSceneIndex].content}
               </>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2 text-center">

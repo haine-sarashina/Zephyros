@@ -297,12 +297,38 @@ async fn ollama_chat_stream_raw(
 }
 
 #[tauri::command]
-async fn ollama_stop_model(model: String) -> Result<String, String> {
+async fn ollama_stop_model(model: String, url: Option<String>) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let clean_model = model.trim();
         if clean_model.is_empty() {
             return Ok("No model specified".to_string());
         }
+
+        // 1. Ollama HTTP API に { "model": model, "keep_alive": 0 } を送信して即時VRAM解放＆推論停止
+        let clean_url = match url {
+            Some(ref u) if !u.trim().is_empty() => u.trim().trim_end_matches('/').to_string(),
+            _ => "http://127.0.0.1:11434".to_string(),
+        };
+
+        let body = serde_json::json!({
+            "model": clean_model,
+            "keep_alive": 0
+        }).to_string();
+
+        let endpoints = vec![
+            format!("{}/api/generate", clean_url),
+            format!("{}/api/generate", clean_url.replace("localhost", "127.0.0.1")),
+            format!("{}/api/generate", clean_url.replace("127.0.0.1", "localhost")),
+        ];
+
+        for ep in &endpoints {
+            let _ = ureq::post(ep)
+                .set("Content-Type", "application/json")
+                .timeout(std::time::Duration::from_secs(3))
+                .send_string(&body);
+        }
+
+        // 2. CLI `ollama stop <model>` を実行
         let out = silent_command("ollama").args(["stop", clean_model]).output();
         match out {
             Ok(output) => {
@@ -310,10 +336,10 @@ async fn ollama_stop_model(model: String) -> Result<String, String> {
                     Ok(format!("Model {} stopped", clean_model))
                 } else {
                     let err = String::from_utf8_lossy(&output.stderr);
-                    Err(format!("ollama stop failed: {}", err))
+                    Ok(format!("HTTP unload sent for {}. CLI output: {}", clean_model, err))
                 }
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Ok(format!("HTTP unload sent for {}. CLI error: {}", clean_model, e)),
         }
     })
     .await

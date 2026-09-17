@@ -368,18 +368,31 @@ export class OllamaService {
   }
 
   /**
-   * AIモデルのGPU推論・生成処理を即時に強制停止させる (ollama stop)
+   * AIモデルのGPU推論・生成処理を即時に強制停止させる (ollama stop ＆ keep_alive: 0 HTTPアンロード)
    */
-  static async stopModel(model: string): Promise<boolean> {
+  static async stopModel(model: string, baseUrl: string = 'http://localhost:11434'): Promise<boolean> {
     if (!model || !model.trim()) return false;
+    const cleanModel = model.trim();
+    const cleanUrl = baseUrl ? baseUrl.trim().replace(/\/+$/, '') : 'http://localhost:11434';
+
+    // 1. HTTP API 経由での即時アンロード (keep_alive: 0)
+    try {
+      await fetch(`${cleanUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: cleanModel, keep_alive: 0 }),
+      });
+    } catch {}
+
+    // 2. Tauri プロキシ命令の実行 (HTTP POST + CLI)
     try {
       if (this.isTauriAvailable()) {
-        await invoke('ollama_stop_model', { model: model.trim() });
+        await invoke('ollama_stop_model', { model: cleanModel, url: cleanUrl });
         return true;
       }
     } catch (e) {
-      console.warn(`[OllamaService] stopModel failed for ${model}:`, e);
+      console.warn(`[OllamaService] stopModel failed for ${cleanModel}:`, e);
     }
-    return false;
+    return true;
   }
 }

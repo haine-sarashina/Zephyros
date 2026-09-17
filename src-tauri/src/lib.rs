@@ -80,6 +80,30 @@ fn save_obsidian_file(vault_path: String, relative_path: String, content: String
 }
 
 #[tauri::command]
+fn clean_obsidian_project_dir(vault_path: String, project_id: String, delete_entire_folder: bool) -> Result<(), String> {
+    if vault_path.trim().is_empty() || project_id.trim().is_empty() {
+        return Ok(());
+    }
+    let vault_dir = std::path::PathBuf::from(vault_path.trim());
+    let project_dir = vault_dir.join(format!("proj_{}", project_id.trim()));
+    if project_dir.exists() {
+        if delete_entire_folder {
+            let _ = fs::remove_dir_all(project_dir);
+        } else {
+            let episodes_dir = project_dir.join("episodes");
+            if episodes_dir.exists() {
+                let _ = fs::remove_dir_all(episodes_dir);
+            }
+            let logs_dir = project_dir.join("logs");
+            if logs_dir.exists() {
+                let _ = fs::remove_dir_all(logs_dir);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Zephyros!", name)
 }
@@ -310,6 +334,7 @@ pub fn run() {
             load_disk_projects,
             save_disk_projects,
             save_obsidian_file,
+            clean_obsidian_project_dir,
             ollama_get_models,
             ollama_chat_raw,
             ollama_chat_stream_raw,

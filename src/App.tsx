@@ -161,9 +161,9 @@ export function App() {
   };
 
   // Obsidian Vault への自動同期ヘルパー
-  const autoSyncObsidian = (project: Project) => {
+  const autoSyncObsidian = (project: Project, cleanFirst: boolean = false) => {
     if (aiSettings?.obsidianVaultPath && project) {
-      ObsidianSyncService.syncProject(aiSettings.obsidianVaultPath, project).catch((err) => {
+      ObsidianSyncService.syncProject(aiSettings.obsidianVaultPath, project, cleanFirst).catch((err) => {
         console.warn('Auto sync to Obsidian failed:', err);
       });
     }
@@ -190,6 +190,11 @@ export function App() {
   };
 
   const handleDeleteProject = (projectId: string) => {
+    if (aiSettings?.obsidianVaultPath) {
+      ObsidianSyncService.cleanProject(aiSettings.obsidianVaultPath, projectId, true).catch((err) => {
+        console.warn('Obsidian Vault フォルダ削除失敗:', err);
+      });
+    }
     StoreManager.deleteProject(projectId);
     const updatedProjects = StoreManager.getProjects();
     setProjects(updatedProjects);

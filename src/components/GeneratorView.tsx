@@ -112,7 +112,12 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
   const rafIdRef = useRef<number | null>(null);
 
   // Obsidian Vault へのリアルタイム自動同期ヘルパー
-  const triggerObsidianSync = async (updatedNovelData?: NovelData | null, updatedBible?: SettingBible, updatedGlossary?: Glossary) => {
+  const triggerObsidianSync = async (
+    updatedNovelData?: NovelData | null,
+    updatedBible?: SettingBible,
+    updatedGlossary?: Glossary,
+    cleanFirst: boolean = false
+  ) => {
     if (!aiSettings?.obsidianVaultPath) return;
     try {
       const targetNovel = updatedNovelData !== undefined ? updatedNovelData : currentNovelData;
@@ -126,7 +131,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
         glossary: updatedGlossary || glossary,
         novelData: targetNovel,
       };
-      const count = await ObsidianSyncService.syncProject(aiSettings.obsidianVaultPath, p);
+      const count = await ObsidianSyncService.syncProject(aiSettings.obsidianVaultPath, p, cleanFirst);
       if (count > 0) {
         setEditorLogState((prev) => [...prev, `[Obsidian同期] ${count}個のMarkdownファイルを Vault 配下に同期更新しました。`]);
       }
@@ -376,8 +381,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
       setStartChapterIndex(0);
       setActiveChapterIndex(0);
 
-      // Obsidian Vault 自動同期
-      await triggerObsidianSync(newNovel, nextBible, nextGlossary);
+      // Obsidian Vault 自動同期 (プロット再生成時は旧エピソード・旧ログをクリーンアップ)
+      await triggerObsidianSync(newNovel, nextBible, nextGlossary, true);
 
       const charCount = nextBible.characters.length;
       const worldCount = nextBible.worldBuilding.length;

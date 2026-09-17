@@ -21,10 +21,33 @@ export class ObsidianSyncService {
   }
 
   /**
-   * プロジェクト全体を Obsidian Vault へ一括同期・保存する
+   * プロジェクトの Obsidian 出力フォルダ（episodes/ や logs/ またはフォルダ全体）を削除・クリーンアップする
    */
-  static async syncProject(vaultPath: string, project: Project): Promise<number> {
+  static async cleanProject(vaultPath: string, projectId: string, deleteEntireFolder: boolean = false): Promise<boolean> {
+    if (!vaultPath || !vaultPath.trim() || !projectId) return false;
+    try {
+      await invoke('clean_obsidian_project_dir', {
+        vaultPath: vaultPath.trim(),
+        projectId: projectId.trim(),
+        deleteEntireFolder: deleteEntireFolder,
+      });
+      return true;
+    } catch (err) {
+      console.warn(`ObsidianVaultクリーンアップ失敗 [proj_${projectId}]:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * プロジェクト全体を Obsidian Vault へ一括同期・保存する
+   * cleanFirst=true の場合、同期前に既存の episodes/ および logs/ を自動で消去します
+   */
+  static async syncProject(vaultPath: string, project: Project, cleanFirst: boolean = false): Promise<number> {
     if (!vaultPath || !vaultPath.trim() || !project) return 0;
+
+    if (cleanFirst) {
+      await this.cleanProject(vaultPath, project.id, false);
+    }
 
     let savedFilesCount = 0;
     const projectDir = `proj_${project.id}`;

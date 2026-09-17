@@ -97,6 +97,7 @@ export interface AISettings {
   keepAlive?: string; // ローカルAI常駐設定 ('-1', '5m', '10m', '30m', '60m', '0')
   thinkCommandTargets?: ThinkCommandTargets; // 各AI呼び出し項目ごとの思考抑止(/nothink)チェックボックス設定
   systemPrompts?: SystemPrompts; // カスタムシステムプロンプト設定
+  obsidianVaultPath?: string; // Obsidian Vault フォルダパス (例: C:/Users/name/Documents/Obsidian/Vault)
 }
 
 export interface ReviewComment {

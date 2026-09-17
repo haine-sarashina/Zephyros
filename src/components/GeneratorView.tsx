@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PromptSettings, SettingBible, Glossary, AISettings, NovelData, Chapter, ReviewComment } from '../types';
 import { NovelEngine } from '../services/novelEngine';
-import { Cpu, Play, Pause, ShieldCheck, FileText, Sparkles, RefreshCw, RotateCcw } from 'lucide-react';
+import { ObsidianSyncService } from '../services/obsidianSyncService';
+import { OllamaLogViewer, OllamaLogEntry } from './OllamaLogViewer';
+import { Cpu, Play, Pause, ShieldCheck, FileText, Sparkles, RefreshCw, RotateCcw, Terminal, FolderCheck } from 'lucide-react';
 
 interface GeneratorViewProps {
   projectId: string;
@@ -99,10 +101,38 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
   const initialLogs = editorLogs || [];
   const [editorLog, setEditorLogState] = useState<string[]>(initialLogs);
 
+  // Ollama通信ログ可視化モーダル状態
+  const [isLogViewerOpen, setIsLogViewerOpen] = useState(false);
+  const [ollamaLogs] = useState<OllamaLogEntry[]>([]);
+
   const streamingEndRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<number | null>(null);
   const chunkBufferRef = useRef<string>('');
   const rafIdRef = useRef<number | null>(null);
+
+  // Obsidian Vault へのリアルタイム自動同期ヘルパー
+  const triggerObsidianSync = async (updatedNovelData?: NovelData | null, updatedBible?: SettingBible, updatedGlossary?: Glossary) => {
+    if (!aiSettings?.obsidianVaultPath) return;
+    try {
+      const targetNovel = updatedNovelData !== undefined ? updatedNovelData : currentNovelData;
+      const p = {
+        id: projectId,
+        title: targetNovel?.title || '無題の物語',
+        createdDate: targetNovel?.createdDate || new Date().toLocaleDateString(),
+        lastUpdatedDate: new Date().toLocaleDateString(),
+        promptSettings,
+        bible: updatedBible || bible,
+        glossary: updatedGlossary || glossary,
+        novelData: targetNovel,
+      };
+      const count = await ObsidianSyncService.syncProject(aiSettings.obsidianVaultPath, p);
+      if (count > 0) {
+        setEditorLogState((prev) => [...prev, `[Obsidian同期] ${count}個のMarkdownファイルを Vault 配下に同期更新しました。`]);
+      }
+    } catch (e) {
+      console.warn('[ObsidianSync] 同期エラー:', e);
+    }
+  };
 
   // ストリーミングテキスト更新時の軽量オートスクロール (behavior: 'auto' ＆ 100msスロットル処理でUI応答フリーズを完全防止)
   useEffect(() => {
@@ -344,6 +374,9 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
       setLocalNovelData(newNovel);
       setStartChapterIndex(0);
       setActiveChapterIndex(0);
+
+      // Obsidian Vault 自動同期
+      await triggerObsidianSync(newNovel, nextBible, nextGlossary);
 
       const charCount = nextBible.characters.length;
       const worldCount = nextBible.worldBuilding.length;
@@ -735,6 +768,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
         chapter.status = 'completed';
         onSaveNovelData(currentNovel, projectId);
         setLocalNovelData(currentNovel);
+        await triggerObsidianSync(currentNovel, latestBible, latestGlossary);
       }
 
       setCurrentStatus('指定された話までの執筆・校閲・設定資料自動更新が完了しました！');
@@ -917,6 +951,28 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
               <ShieldCheck className="w-4 h-4 text-purple-400" />
               <span>編集者AI (Gemma) 校閲ログ</span>
             </h3>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsLogViewerOpen(true)}
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-semibold rounded-lg border border-slate-700 transition flex items-center space-x-1"
+                title="Ollama通信ログとプロンプト可視化ビューアを開く"
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>通信ログ可視化</span>
+              </button>
+
+              {aiSettings.obsidianVaultPath && (
+                <button
+                  onClick={() => triggerObsidianSync(currentNovelData)}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold rounded-lg border border-slate-700 transition flex items-center space-x-1"
+                  title="Obsidian Vault に手動同期"
+                >
+                  <FolderCheck className="w-3.5 h-3.5" />
+                  <span>Vault同期</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 bg-slate-950 rounded-xl p-3 overflow-y-auto border border-slate-800/80 space-y-2 text-xs font-mono">
@@ -929,7 +985,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                       ? 'bg-rose-950/70 border border-rose-800 text-rose-300'
                       : log.includes('[編集者AI]')
                       ? 'bg-purple-950/60 border border-purple-800/80 text-purple-200'
-                      : log.includes('[設定資料集') || log.includes('[特殊用語辞典')
+                      : log.includes('[設定資料集') || log.includes('[特殊用語辞典') || log.includes('[Obsidian同期')
                       ? 'bg-emerald-950/60 border border-emerald-800/80 text-emerald-200'
                       : log.includes('[校閲指摘')
                       ? 'bg-amber-950/60 border border-amber-800/80 text-amber-300'
@@ -947,6 +1003,13 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Ollama 通信ログ ＆ Markdown可視化モーダル */}
+      <OllamaLogViewer
+        isOpen={isLogViewerOpen}
+        onClose={() => setIsLogViewerOpen(false)}
+        logs={ollamaLogs}
+      />
     </div>
   );
 };

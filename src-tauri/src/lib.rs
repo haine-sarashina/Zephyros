@@ -66,6 +66,20 @@ fn save_app_state(app: tauri::AppHandle, state: AppWindowState) -> Result<(), St
 }
 
 #[tauri::command]
+fn save_obsidian_file(vault_path: String, relative_path: String, content: String) -> Result<(), String> {
+    if vault_path.trim().is_empty() {
+        return Ok(());
+    }
+    let vault_dir = std::path::PathBuf::from(vault_path.trim());
+    let full_path = vault_dir.join(relative_path.trim().trim_start_matches(['/', '\\']));
+    
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&full_path, content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Zephyros!", name)
 }
@@ -271,6 +285,7 @@ pub fn run() {
             save_app_state,
             load_disk_projects,
             save_disk_projects,
+            save_obsidian_file,
             ollama_get_models,
             ollama_chat_raw,
             ollama_chat_stream_raw,

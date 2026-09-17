@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
+import { open } from '@tauri-apps/plugin-dialog';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { AISettings, SystemPrompts } from '../types';
 import { OllamaService, OllamaModelInfo } from '../services/ollamaService';
@@ -507,6 +508,45 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
           </select>
           <p className="text-[11px] text-slate-500">
             OllamaがGPUメモリ(VRAM)上にモデルを保持する時間を指定します。常駐に設定すると毎回のモデルロード待ちを排除できます。
+          </p>
+        </div>
+
+        {/* Obsidian Vault 連携設定 */}
+        <div className="pt-3 border-t border-slate-800 space-y-2">
+          <label className="block text-xs font-semibold text-slate-300">
+            Obsidian Vault 保存先ディレクトリ (`obsidianVaultPath`)
+          </label>
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={formState.obsidianVaultPath || ''}
+              onChange={(e) => setFormState({ ...formState, obsidianVaultPath: e.target.value })}
+              placeholder="例: C:\Users\Username\Documents\ObsidianVault"
+              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const selected = await open({
+                    directory: true,
+                    multiple: false,
+                    title: 'Obsidian Vault フォルダを選択',
+                  });
+                  if (selected && typeof selected === 'string') {
+                    setFormState({ ...formState, obsidianVaultPath: selected });
+                  }
+                } catch (e) {
+                  console.warn('Folder picker failed:', e);
+                }
+              }}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition"
+            >
+              フォルダ選択...
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            指定すると、コンセプト・あらすじ・各話シーン本文・編集AIの推敲ログ (`logs/`) が Obsidian フォルダ配下に自動保存され、リアルタイムに確認・編集可能になります。
           </p>
         </div>
       </div>

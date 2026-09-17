@@ -366,4 +366,20 @@ export class OllamaService {
 
     return this.decodeUtf8HexEscapes(fullContent);
   }
+
+  /**
+   * AIモデルのGPU推論・生成処理を即時に強制停止させる (ollama stop)
+   */
+  static async stopModel(model: string): Promise<boolean> {
+    if (!model || !model.trim()) return false;
+    try {
+      if (this.isTauriAvailable()) {
+        await invoke('ollama_stop_model', { model: model.trim() });
+        return true;
+      }
+    } catch (e) {
+      console.warn(`[OllamaService] stopModel failed for ${model}:`, e);
+    }
+    return false;
+  }
 }

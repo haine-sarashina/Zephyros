@@ -272,6 +272,30 @@ async fn ollama_chat_stream_raw(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn ollama_stop_model(model: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let clean_model = model.trim();
+        if clean_model.is_empty() {
+            return Ok("No model specified".to_string());
+        }
+        let out = silent_command("ollama").args(["stop", clean_model]).output();
+        match out {
+            Ok(output) => {
+                if output.status.success() {
+                    Ok(format!("Model {} stopped", clean_model))
+                } else {
+                    let err = String::from_utf8_lossy(&output.stderr);
+                    Err(format!("ollama stop failed: {}", err))
+                }
+            }
+            Err(e) => Err(e.to_string()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -289,6 +313,7 @@ pub fn run() {
             ollama_get_models,
             ollama_chat_raw,
             ollama_chat_stream_raw,
+            ollama_stop_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

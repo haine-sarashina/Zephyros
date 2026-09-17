@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PromptSettings, SettingBible, Glossary, AISettings, NovelData, Chapter, ReviewComment } from '../types';
 import { NovelEngine } from '../services/novelEngine';
+import { OllamaService } from '../services/ollamaService';
 import { ObsidianSyncService } from '../services/obsidianSyncService';
 import { OllamaLogViewer, OllamaLogEntry } from './OllamaLogViewer';
 import { Cpu, Play, Pause, ShieldCheck, FileText, Sparkles, RefreshCw, RotateCcw, Terminal, FolderCheck } from 'lucide-react';
@@ -786,10 +787,17 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
     }
   };
 
-  const handlePause = () => {
+  const handlePause = async () => {
     if (currentSession.abortController) {
       currentSession.abortController.abort();
     }
+    if (aiSettings.writerModel) {
+      await OllamaService.stopModel(aiSettings.writerModel);
+    }
+    if (aiSettings.editorModel && aiSettings.editorModel !== aiSettings.writerModel) {
+      await OllamaService.stopModel(aiSettings.editorModel);
+    }
+    setEditorLog((prev) => [...prev, '[システム] 停止シグナルを送信し、OllamaのGPU推論処理を即時に強制切断しました。']);
   };
 
   return (

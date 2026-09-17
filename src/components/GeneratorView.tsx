@@ -327,8 +327,13 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
     const controller = new AbortController();
     currentSession.abortController = controller;
 
+    // ボタン押下・確認直後に Obsidian Vault 内の旧エピソード原稿 ＆ 旧校閲ログを即時削除・クリア
+    if (aiSettings?.obsidianVaultPath) {
+      await ObsidianSyncService.cleanProject(aiSettings.obsidianVaultPath, projectId, false);
+    }
+
     setCurrentStatus(`執筆者AI (${aiSettings.writerModel}) が全話のプロット・構成案を策定中...`);
-    setEditorLog(['[システム] プロット生成セッションを開始しました。']);
+    setEditorLog(['[システム] プロット再作成を開始しました。Obsidian Vault 内の旧データをクリア完了。']);
 
     try {
       const MAX_OUTLINE_RETRIES = 3;

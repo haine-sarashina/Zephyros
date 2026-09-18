@@ -5503,7 +5503,7 @@ dependencies = [
 
 [[package]]
 name = "zephyros"
-version = "0.5.5"
+version = "0.5.7"
 dependencies = [
  "serde",
  "serde_json",

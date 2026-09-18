@@ -23,10 +23,11 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 【厳格出力ルール】
 1. 思考プロセス(<think>)、前置き・解説テキスト、Markdown装飾は含めず、純粋なJSONオブジェクトのみを出力してください。
 2. JSONの文字列値内部でダブルクォーテーション（"）を使用する場合は、必ず 「 」 カギカッコに置き換えるか \\" にエスケープしてください。
-3. **作品タイトル（title）は10〜25文字程度の短く魅力的な書籍タイトルを作成してください。あらすじ本文や指定文（例: 『主人公は女子高生のサキュバスで〜〜』）をそのままタイトルに設定することは絶対禁止です。**
-4. **登場人物（characters）はユーザーの【詳細指定】に書かれた性別・立場・配役・状態（女性主人公なら性別・一人称「私」等）を完璧に尊重し、合計 3〜5 名を作成してください。主人公の性別や設定を勝手に男性等に改変することは絶対禁止です。**
-5. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全て充実させて出力してください。
+3. **作品タイトル（title）は10〜25文字程度の短く魅力的な【今回のお題・あらすじ専用の書籍タイトル】を作成してください。あらすじ本文や詳細指定の長文（例: 『【あらすじ】現代に現れた迷宮を...』）をそのままタイトルに設定することは絶対禁止です。**
+4. **登場人物（characters）はユーザーの【詳細指定】および【お題】に書かれた性別・立場・配役・道具・相棒（女性主人公・黒セーラー・バット・ドローン等）を100%完璧に尊重し、合計 3〜5 名を作成してください。主人公の性別や設定を勝手に男性に変更したり、お題に含まれない無関係な属性（サキュバス、異世界等）を混入させることは絶対禁止です。**
+5. characters (3〜5名), worldBuilding (3〜5件), geography (2〜4件), terms (3〜5件), rubies (3〜5件) を必ず全てユーザーのお題・あらすじに沿って充実させて出力してください。
 6. **【あらすじ本文のコピー禁止】**: worldBuildingのcontent、geographyのdescription、termsのdescription、charactersのbackgroundに【あらすじ全文】や【詳細指定の文章】をそのままコピーして使い回すことは絶対禁止です。各項目（設定、地名、用語、キャラクター）ごとに、その項目固有の短い個別解説（30〜100字程度）を記述してください。
+7. **【お題キーワードの100%準拠】**: プロンプトの例示用単語や他作品の設定（サキュバス、別ジャンルのテンプレ等）を勝手に混ぜず、必ず今回与えられた【お題タグ】と【詳細指定】のみから登場人物名・設定を作成してください。
 
 必ず以下のJSON形式のみを出力してください：
 {
@@ -950,9 +951,9 @@ ${JSON.stringify(draftData, null, 2)}
 
 【重要命令】:
 1. 作品タイトル（title）は10〜25文字程度の短く魅力的な【今回のお題（${promptSettings.themes.join(', ')}）専用の新しい書籍タイトル】を作成してください。過去の他作品のタイトルや【詳細指定】の文章全体をそのままコピーすることは絶対禁止です。必ず今回のお題キーワードに合わせたオリジナルタイトルにしてください。
-2. 【詳細指定】に書かれた登場人物の性別・立場・配役・状態（女性主人公なら性別・一人称「私」等）を100%絶対順守し、主人公を勝手に男性等に改変することは絶対禁止です。
-3. 物語の『主人公』に加えて、作品を彩る『メインヒロイン/相手役（1〜2名）』や『サブキャラクター/仲間/ライバル』を必ず含め、合計 3〜5 名の魅力的な登場人物（characters）を作成してください。主人公1名のみの作成は禁止します。
-4. 世界観設定（worldBuilding 3〜5件）、地名（geography 2〜4件）、特殊用語（terms 3〜5件）、ルビ表記（rubies 3〜5件）も必ず全て充実させて作成してください。
+2. 【詳細指定】および【お題】に書かれた登場人物の性別・立場・配役・状態・相棒・装備（例: 女性主人公、黒セーラー服、金属バット、ドローンAI等）を100%完璧に遵守してください。お題に含まれていない属性（サキュバス、異世界等）を身勝手に付与することは絶対禁止です。
+3. 物語の『主人公』に加えて、お題やあらすじに登場する『相棒/仲間/ライバル/対戦相手/配信視聴者』等を必ず含め、合計 3〜5 名の魅力的な登場人物（characters）を作成してください。お題に合わない汎用的な「相手役の男性」などの仮名ではなく、あらすじに沿った固有のキャラクター名（名前・愛称）と設定を作成してください。
+4. 世界観設定（worldBuilding 3〜5件）、地名（geography 2〜4件）、特殊用語（terms 3〜5件）、ルビ表記（rubies 3〜5件）も必ず今回のお題とあらすじに沿って全て充実させて作成してください。
 
 上記を踏まえ、全${targetChapterCount}話構成の新規作品タイトル・全体あらすじ・初期設定資料集を作成してください。`;
 
@@ -1157,7 +1158,7 @@ ${JSON.stringify(draftData, null, 2)}
 
     const initialBible: SettingBible = {
       characters: rawChars.map((c: any, idx: number) => {
-        const { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name || `登場人物${idx + 1}`);
+        let { cleanName, extractedRole } = NovelEngine.sanitizeCharacterName(c.name || `登場人物${idx + 1}`);
         const role = c.role || extractedRole || '主要人物';
         let appearance = c.appearance && !NovelEngine.isSynopsisCopy(c.appearance, promptSettings, step1Parsed.synopsis)
           ? c.appearance
@@ -1165,6 +1166,13 @@ ${JSON.stringify(draftData, null, 2)}
         let background = c.background && !NovelEngine.isSynopsisCopy(c.background, promptSettings, step1Parsed.synopsis)
           ? c.background
           : `「${cleanName}」の作中における人物背景・目的`;
+
+        // お題・あらすじに指定されていない無関係なキーワード (サキュバス等) が全年齢作品に誤混入した場合のクレンジング
+        const promptFullText = `${promptSettings.storyConcept} ${promptSettings.detailedPrompt} ${promptSettings.themes.join(' ')}`;
+        if (promptSettings.rating !== 'r18' && !promptFullText.includes('サキュバス')) {
+          cleanName = cleanName.replace(/サキュバスの?/g, '').trim() || '主人公の少女';
+          appearance = appearance.replace(/サキュバスの?/g, '').trim();
+        }
 
         const illustrationPrompt = NovelEngine.buildIllustrationPrompt({
           name: cleanName,

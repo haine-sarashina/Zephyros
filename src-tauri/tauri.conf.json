@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Zephyros",
-  "version": "0.5.7",
-  "identifier": "com.haine.zephyros",
+  "version": "0.5.8",
+  "identifier": "com.kurone.zephyros",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -40,7 +40,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/haine-sarashina/Zephyros/releases/latest/download/latest.json"
+        "https://github.com/kurone-hinamori/Zephyros/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2NjJFRTA2OUEwODkxNEYKUldSUGtRaWFCdTVpWmdqOEtjdENRZHFNUEQ3bTljM2V3TnZPcTdyV1BCVXFmcW1EUC94dXJSblcK"
     }

@@ -838,11 +838,18 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
 
         {/* ボタン＆再開コントロール */}
         <div className="flex flex-wrap items-center gap-3">
-          {!currentNovelData ? (
+          {isGenerating ? (
+            <button
+              onClick={handlePause}
+              className="flex items-center space-x-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
+            >
+              <Pause className="w-4 h-4 fill-current" />
+              <span>一時停止 / キャンセル</span>
+            </button>
+          ) : !currentNovelData ? (
             <button
               onClick={handleGenerateOutline}
-              disabled={isGenerating}
-              className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs rounded-xl shadow-lg transition-all disabled:opacity-50"
+              className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs rounded-xl shadow-lg transition-all"
             >
               <Sparkles className="w-4 h-4" />
               <span>1. 全話プロット生成</span>
@@ -860,7 +867,6 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                     setStartChapterIndex(idx);
                     setActiveChapterIndex(idx);
                   }}
-                  disabled={isGenerating}
                   className="bg-transparent text-slate-200 text-xs font-semibold focus:outline-none cursor-pointer"
                 >
                   {currentNovelData.chapters.map((ch, idx) => {
@@ -876,36 +882,25 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
 
               <button
                 onClick={handleGenerateOutline}
-                disabled={isGenerating}
-                className="p-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 rounded-xl transition-colors"
+                className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors"
                 title="プロット再生成"
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
 
-              {!isGenerating ? (
-                <button
-                  onClick={handleStartFullGeneration}
-                  className="flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>
-                    {isAllCompleted
-                      ? '全話完結（最初から再執筆）'
-                      : startChapterIndex > 0
-                      ? `第${startChapterIndex + 1}話から執筆再開`
-                      : '全話自動執筆スタート'}
-                  </span>
-                </button>
-              ) : (
-                <button
-                  onClick={handlePause}
-                  className="flex items-center space-x-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-rose-600/30 transition-all"
-                >
-                  <Pause className="w-4 h-4 fill-current" />
-                  <span>一時停止</span>
-                </button>
-              )}
+              <button
+                onClick={handleStartFullGeneration}
+                className="flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition-all"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                <span>
+                  {isAllCompleted
+                    ? '全話完結（最初から再執筆）'
+                    : startChapterIndex > 0
+                    ? `第${startChapterIndex + 1}話から執筆再開`
+                    : '全話自動執筆スタート'}
+                </span>
+              </button>
 
               <button
                 onClick={onViewManuscript}

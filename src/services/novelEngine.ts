@@ -910,7 +910,14 @@ ${JSON.stringify(draftData, null, 2)}
   ): string {
     const isR18 = promptSettings?.rating === 'r18';
     const defaultPrompts = isR18 ? R18_SYSTEM_PROMPTS : DEFAULT_SYSTEM_PROMPTS;
-    return aiSettings?.systemPrompts?.[key] || defaultPrompts[key] || DEFAULT_SYSTEM_PROMPTS[key] || '';
+    let prompt = aiSettings?.systemPrompts?.[key] || defaultPrompts[key] || DEFAULT_SYSTEM_PROMPTS[key] || '';
+
+    // 英語メタ思考・ドラフト計画文の抑制ルールが未搭載の旧システムプロンプトが保存されている場合、強制的に抑止指示を補填
+    if ((key === 'writeSceneContent' || key === 'rewriteSceneWithFeedback') && !prompt.includes('英語の計画メモ')) {
+      prompt += '\n\n【厳格制約】「Goal: Write...」「Target length:...」「Self-Correction」「Writing strategy」「Let\'s start writing」等の英語の計画メモ・ドラフト思考は絶対に1文字も含めないでください。応答の1文字目から完全な日本語の小説本文（地の文または会話文）のみを出力してください。';
+    }
+
+    return prompt;
   }
 
   /**

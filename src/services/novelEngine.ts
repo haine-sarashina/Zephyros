@@ -85,8 +85,8 @@ export const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
    - ルビは『ひらがな』だけでなく、『火球魔法《ファイアーボール》』『聖剣《エクスカリバー》』のようにカタカナのルビも使用可能です。
    - ルビを付与する場合は必ず「漢字《ルビ》」の形式とし、《 を開いた場合は必ず 》 で閉じてください。
 9. **ユーザー詳細指定・配役・状態の絶対順守**: 【ユーザー詳細あらすじ・指定事項】および設定資料集に記述された「誰が主人公/行動の主導者か」「登場人物の状態（寝ている/行動不能/気絶中など）」を100%厳格に守り、主導権や立場、人物の意識状態（寝ているのを勝手に起こす等）をAIの都合で勝手に変更・逆転させないでください。
-10. **前置き・メタ解説・カッコメモの絶対禁止**: 「（※ここでは〜〜）」、「以下が〜〜の本文です」、「【シーン2】」といった前置き解説、メタメモ、見出しテキストは絶対に含めないでください。本文の1文字目から純粋な日本語の小説本文（地の文または会話文）のみを出力してください。
-11. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。`,
+10. **前置き・メタ解説・カッコメモ・英語の計画メモの絶対禁止**: 「（※ここでは〜〜）」、「以下が〜〜の本文です」、「Goal: Write...」、「Self-Correction」、「Writing strategy」、「Let's start writing」等の前置き解説、メタメモ、英語の下書き・計画メモ、見出しテキストは絶対に1文字も含めないでください。本文の1文字目から純粋な日本語の小説本文（地の文または会話文）のみを出力してください。
+11. JSONフォーマット、HTMLタグ、思考プロセス(<think>)、英語のドラフトメモは出力しないでください。`,
 
   proofreadScene: `あなたは文芸誌のベテラン編集者（校閲エディター）です。
 出来上がった原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
@@ -262,8 +262,8 @@ export const R18_SYSTEM_PROMPTS: SystemPrompts = {
 7. 設定資料集に登録されている口調・一人称・二人称・人間関係・性的嗜好を厳格に守ってください。
 8. 特殊用語辞典に登録されている造語やルビ表記（例: 異世界《いせかい》）を積極的に活用してください。
 9. **ユーザー詳細指定・配役・状態の絶対順守**: 【ユーザー詳細あらすじ・指定事項】および設定資料集に記述された「誰が主人公/行動の主導者か」「登場人物の状態（寝ている/行動不能/気絶中など）」を100%厳格に守り、主導権や立場、人物の意識状態（寝ているのを勝手に起こす等）をAIの都合で勝手に変更・逆転させないでください。
-10. **前置き・メタ解説・カッコメモの絶対禁止**: 「（※ここでは〜〜）」、「以下が〜〜の本文です」、「【シーン2】」といった前置き解説、メタメモ、見出しテキストは絶対に含めないでください。本文の1文字目から純粋な日本語の成人向け小説本文（地の文または会話文）のみを出力してください。
-11. JSONフォーマット、HTMLタグ、思考プロセス(<think>)は出力しないでください。`,
+10. **前置き・メタ解説・カッコメモ・英語の計画メモの絶対禁止**: 「（※ここでは〜〜）」、「以下が〜〜の本文です」、「Goal: Write...」、「Self-Correction」、「Writing strategy」、「Let's start writing」等の前置き解説、メタメモ、英語の下書き・計画メモ、見出しテキストは絶対に1文字も含めないでください。本文の1文字目から純粋な日本語の成人向け小説本文（地の文または会話文）のみを出力してください。
+11. JSONフォーマット、HTMLタグ、思考プロセス(<think>)、英語のドラフトメモは出力しないでください。`,
 
   proofreadScene: `あなたは成人向けライトノベル文芸誌のベテラン編集者（校閲エディター）です。
 出来上がったR-18二次元ドリーム文庫風原稿をチェックし、設定との【致命的な設定矛盾】や【明確な誤字脱字・表記崩れ】を検出してください。
@@ -1861,11 +1861,50 @@ ${cleanOriginalDraft}
   }
 
   /**
+   * AIモデルが冒頭に出力した英語の思考メモ・ドラフト計画文 (Goal:, Target length:, Self-Correction, Writing strategy 等) を自動検知・完全カットするヘルパー
+   */
+  static stripEnglishMetaThinking(text: string): string {
+    if (!text) return '';
+    let result = text.trim();
+
+    const hasEnglishMeta = /(?:write_instructions_|Goal:\s*Write|Target length:|Self-Correction|Drafting thought|\*   Goal:|\*   Topic:|\*   Constraints check:|\*   Setting or context:|\*Drafting thought|Writing strategy for length|Let's start writing)/i.test(result);
+
+    if (hasEnglishMeta) {
+      const matchStart = result.match(/(?:Let's start writing|Let's go|Let's begin)[.\s\r\n]*/i);
+      if (matchStart && matchStart.index !== undefined) {
+        result = result.slice(matchStart.index + matchStart[0].length).trim();
+      } else {
+        const lines = result.split(/\r?\n/);
+        let storyStartIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          if (/^[\*\-\#\(]?\s*(?:Goal|Target|Topic|Theme|Constraints|Setting|Character|Action|Mood|Introduction|Middle|Conclusion|Self-Correction|Plan|Drafting|Writing|Rubies|Wait|No quotes|End sentences|Use rubies|Length|Content|write_instructions)/i.test(line)) {
+            continue;
+          }
+          if (line.startsWith('書_') || line.startsWith('Let\'s') || line.startsWith('(Self-Correction') || line.startsWith('(Plan)') || line.startsWith('*   ')) {
+            continue;
+          }
+          if (/[\u3040-\u309F\u4E00-\u9FAF]{3,}/.test(line) && !line.includes('漢字《ルビ》') && !line.includes('台詞の末尾')) {
+            storyStartIdx = i;
+            break;
+          }
+        }
+        if (storyStartIdx > 0) {
+          result = lines.slice(storyStartIdx).join('\n').trim();
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
    * 原稿テキストの自動整律・ルビ記号の補正・句点整形ヘルパー
    */
   static sanitizeManuscript(text: string, endingIndicator?: string): string {
     if (!text) return '';
     let sanitized = NovelEngine.decodeUtf8HexEscapes(text).trim();
+    sanitized = NovelEngine.stripEnglishMetaThinking(sanitized);
 
     // 0. 冒頭の文字化け記号（）やメタ解説カッコ・前置き指示文の自動クレンジング
     sanitized = sanitized.replace(/[\uFFFD\uFFFE\uFFFF]/g, '');

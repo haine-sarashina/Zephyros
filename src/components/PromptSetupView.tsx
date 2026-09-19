@@ -45,19 +45,6 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
     });
   };
 
-  const extractJson = (text: string): string => {
-    let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    const markdownMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-    if (markdownMatch) {
-      cleaned = markdownMatch[1];
-    }
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      return cleaned.slice(firstBrace, lastBrace + 1);
-    }
-    return cleaned;
-  };
 
   // ガチャ (AIによるコンセプト ＆ あらすじリアルタイム生成)
   const handleGachaRoll = async () => {
@@ -84,24 +71,14 @@ export const PromptSetupView: React.FC<PromptSetupViewProps> = ({
         keepAlive: aiSettings?.keepAlive || '-1',
       };
 
-      const rawResponse = await OllamaService.chat(baseUrl, model, systemPrompt, userPrompt, 0.85, undefined, false, aiOptions);
-      const jsonStr = extractJson(rawResponse);
-      let parsed: any;
-      try {
-        parsed = JSON.parse(jsonStr);
-      } catch {
-        // AIがJSON形式で返さなかった場合のテキスト抽出フォールバック
-        parsed = {
-          storyConcept: rawResponse.slice(0, 60).replace(/[\r\n]+/g, ' '),
-          detailedPrompt: rawResponse,
-        };
-      }
+      const rawResponse = await OllamaService.chat(baseUrl, model, systemPrompt, userPrompt, 0.85, undefined, true, aiOptions);
+      const parsed = NovelEngine.parseGachaResult(rawResponse, `${themes.join('×')}の物語`);
 
       if (parsed.storyConcept || parsed.detailedPrompt) {
         updateStateAndSave((prev) => ({
           ...prev,
-          storyConcept: parsed.storyConcept || `${themes.join('×')}の物語`,
-          detailedPrompt: parsed.detailedPrompt || rawResponse,
+          storyConcept: parsed.storyConcept,
+          detailedPrompt: parsed.detailedPrompt,
         }));
       } else {
         throw new Error('AIからの応答フォーマットを抽出できませんでした。');

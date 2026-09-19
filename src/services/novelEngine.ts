@@ -2410,6 +2410,108 @@ ${draftContent.slice(0, 10000)}
   }
 
   /**
+   * AIモデルごとのキー命名ブレ（"detailedPrompt way", "detailed_prompt", "synopsis" 等）や
+   * マークダウン装飾・JSON汚染を完全吸収してコンセプトとあらすじをパース・抽出する
+   */
+  public static parseGachaResult(rawResponse: string, fallbackTitle: string = '新規物語'): { storyConcept: string; detailedPrompt: string } {
+    if (!rawResponse || !rawResponse.trim()) {
+      return { storyConcept: fallbackTitle, detailedPrompt: '' };
+    }
+
+    let parsed: any = null;
+
+    try {
+      parsed = this.cleanAndParseJson(rawResponse);
+    } catch (_) {}
+
+    if (parsed && typeof parsed === 'object') {
+      // 1. storyConcept のキー揺らぎ吸収
+      let concept = (
+        parsed.storyConcept ||
+        parsed.story_concept ||
+        parsed.concept ||
+        parsed.catchphrase ||
+        parsed["storyConcept "] ||
+        parsed["メインコンセプト"] ||
+        parsed["キャッチコピー"] ||
+        parsed.title ||
+        ''
+      ).toString().trim();
+
+      // 2. detailedPrompt のキー揺らぎ吸収
+      let prompt = (
+        parsed.detailedPrompt ||
+        parsed.detailed_prompt ||
+        parsed.synopsis ||
+        parsed.detailedPromptWay ||
+        parsed["detailedPrompt way"] ||
+        parsed["detailedPrompt "] ||
+        parsed["詳細プロンプト"] ||
+        parsed["あらすじ"] ||
+        parsed["詳細指定"] ||
+        parsed.summary ||
+        parsed.description ||
+        parsed.story ||
+        ''
+      ).toString().trim();
+
+      // キーが見つからない場合の柔軟探索 (キー名に prompt, synopsis, detailed, あらすじ 等を含むか、100字以上の文字列値)
+      if (!prompt) {
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string' && v.trim().length > 0) {
+            const lowerK = k.toLowerCase();
+            if (lowerK.includes('prompt') || lowerK.includes('synopsis') || lowerK.includes('detailed') || lowerK.includes('story') || lowerK.includes('summary') || k.includes('あらすじ') || k.includes('詳細')) {
+              prompt = v.trim();
+              break;
+            }
+          }
+        }
+      }
+
+      // なおも見つからない場合、100文字以上の最長文字列値を detailedPrompt とする
+      if (!prompt) {
+        let maxLen = 0;
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string' && v.trim().length > maxLen && k !== 'storyConcept') {
+            maxLen = v.trim().length;
+            prompt = v.trim();
+          }
+        }
+      }
+
+      if (!concept && prompt) {
+        concept = prompt.slice(0, 50).replace(/[\r\n]+/g, ' ');
+      }
+
+      if (concept || prompt) {
+        return {
+          storyConcept: this.sanitizePromptConcept(concept) || fallbackTitle,
+          detailedPrompt: prompt || rawResponse,
+        };
+      }
+    }
+
+    // JSONオブジェクトとして抽出できなかった場合のプレーンテキストパース
+    let cleanText = rawResponse.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+
+    // {"storyConcept": "...", "detailedPrompt": "..."} のような生文字列からの正規表現レスキュー
+    const conceptMatch = cleanText.match(/"storyConcept"\s*:\s*"([^"]+)"/i) || cleanText.match(/"concept"\s*:\s*"([^"]+)"/i);
+    const promptMatch = cleanText.match(/"detailedPrompt[^"]*"\s*:\s*"([^"]+)"/i) || cleanText.match(/"synopsis"\s*:\s*"([^"]+)"/i);
+
+    if (conceptMatch || promptMatch) {
+      return {
+        storyConcept: conceptMatch ? conceptMatch[1].replace(/\\n/g, ' ') : fallbackTitle,
+        detailedPrompt: promptMatch ? promptMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : cleanText,
+      };
+    }
+
+    return {
+      storyConcept: cleanText.slice(0, 50).replace(/[\r\n]+/g, ' '),
+      detailedPrompt: cleanText,
+    };
+  }
+
+  /**
    * キャラクター名からカッコ付きの注釈（「（主人公）」など）を取り除く
    */
   public static sanitizeCharacterName(rawName: string): { cleanName: string; extractedRole?: string } {

@@ -549,6 +549,27 @@ export const AISettingsView: React.FC<AISettingsViewProps> = ({ settings, onSave
             指定すると、コンセプト・あらすじ・各話シーン本文・編集AIの推敲ログ (`logs/`) が Obsidian フォルダ配下に自動保存され、リアルタイムに確認・編集可能になります。
           </p>
         </div>
+
+        {/* 反復ループ (デジェネレーション) 検知時の自動リトライ設定 */}
+        <div className="pt-3 border-t border-slate-800 space-y-2">
+          <label className="block text-xs font-semibold text-slate-300">
+            文章反復ループ（デジェネレーション）検知時の自動復旧設定
+          </label>
+          <label className="flex items-start space-x-3 p-3 bg-slate-950/70 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition-colors">
+            <input
+              type="checkbox"
+              checked={formState.autoRetryOnDegeneration !== false}
+              onChange={(e) => setFormState({ ...formState, autoRetryOnDegeneration: e.target.checked })}
+              className="mt-0.5 w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500"
+            />
+            <div>
+              <span className="text-xs font-semibold text-slate-200">繰り返し（反復ループ）検知時にOllamaをリセットして自動再試行する</span>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                本文執筆中に同一文章のループ・反復異常を検知した際、自動でOllamaのモデル推論をリセット(stop_model)し、同シーンの執筆を自動で再開します。同一シーンで連続してループが発生した場合は安全のため緊急停止します。
+              </p>
+            </div>
+          </label>
+        </div>
       </div>
 
       {/* 4. システムプロンプトの編集 (System Prompt Customization) */}

@@ -110,6 +110,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
   const scrollTimeoutRef = useRef<number | null>(null);
   const chunkBufferRef = useRef<string>('');
   const rafIdRef = useRef<number | null>(null);
+  const isDegenerationAbortedRef = useRef<boolean>(false);
+  const sameSceneDegenCountRef = useRef<number>(0);
 
   // Obsidian Vault へのリアルタイム自動同期ヘルパー
   const triggerObsidianSync = async (
@@ -171,6 +173,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
               const degenCheck = NovelEngine.detectAndFixDegeneration(next);
               if (degenCheck.hasDegeneration && currentSession.abortController && !currentSession.abortController.signal.aborted) {
                 console.warn('[Realtime Degen Detected] Aborting stream early:', degenCheck.reasons);
+                isDegenerationAbortedRef.current = true;
                 setEditorLog((prevLogs) => [
                   ...prevLogs,
                   `[リアルタイム自動回避] 生成文章の無限ループ (${degenCheck.reasons.join(' / ')}) を検知したため、ストリーミングを早期自動中断・クレンジングしました。`
@@ -470,6 +473,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
     }
 
     setIsGenerating(true);
+    sameSceneDegenCountRef.current = 0;
+    isDegenerationAbortedRef.current = false;
     const controller = new AbortController();
     currentSession.abortController = controller;
 
@@ -486,6 +491,7 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
         setEditorLog((prev) => [...prev, `\n=== 【${chapter.title}】 の執筆・校閲・設定更新を開始 ===`]);
 
         for (let sIdx = 0; sIdx < chapter.scenes.length; sIdx++) {
+          sameSceneDegenCountRef.current = 0;
           // すでに本文が書かれていて完了しているシーンはスキップ
           const existingScene = chapter.scenes[sIdx];
           if (existingScene.status === 'completed' && existingScene.content && existingScene.content.trim().length > 500) {
@@ -569,6 +575,13 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
                   `[システム警告] 生成文章に異常 (${degenCheck.reasons.join(' / ')}) を検知したため自動除染クレンジングを実行しました。`,
                 ]);
                 draftedContent = degenCheck.cleanedText;
+              }
+
+              if (!draftedContent || draftedContent.trim().length < 200) {
+                if (degenCheck.hasDegeneration) {
+                  isDegenerationAbortedRef.current = true;
+                }
+                throw new Error(`執筆者AIからの本文生成結果が空、または短すぎます (${draftedContent?.length || 0}字)。`);
               }
 
               // 中間原稿キャッシュ保存
@@ -769,7 +782,56 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
 
               sceneSuccess = true;
             } catch (sceneErr: any) {
-              if (sceneErr.name === 'AbortError' || currentSession.abortController?.signal.aborted) {
+              if (isDegenerationAbortedRef.current || sceneErr.name === 'AbortError' || currentSession.abortController?.signal.aborted) {
+                if (isDegenerationAbortedRef.current) {
+                  isDegenerationAbortedRef.current = false;
+                  if (aiSettings.autoRetryOnDegeneration !== false) {
+                    sameSceneDegenCountRef.current += 1;
+                    if (sameSceneDegenCountRef.current <= 2) {
+                      setEditorLog((prev) => [
+                        ...prev,
+                        `[自動リカバリ] 文章の反復ループを検知したため、Ollamaをリセットして同シーンの執筆を自動再試行します (${sameSceneDegenCountRef.current}/2回目)...`,
+                      ]);
+                      setCurrentStatus(`[自動リカバリ] 反復ループ検知のためOllamaをリセットし自動再試行中 (${sameSceneDegenCountRef.current}/2回目)...`);
+                      if (aiSettings.writerModel) {
+                        await OllamaService.stopModel(aiSettings.writerModel, aiSettings.ollamaUrl);
+                      }
+                      if (aiSettings.editorModel && aiSettings.editorModel !== aiSettings.writerModel) {
+                        await OllamaService.stopModel(aiSettings.editorModel, aiSettings.ollamaUrl);
+                      }
+                      setStreamingText('');
+                      currentSession.abortController = new AbortController();
+                      await delayWithSignal(1000, currentSession.abortController.signal);
+                      continue;
+                    } else {
+                      setEditorLog((prev) => [
+                        ...prev,
+                        `[緊急停止] 同一シーンで反復ループが連続発生したため自動リカバリを停止しました。モデル設定やプロンプトを確認の上、手動で再開してください。`,
+                      ]);
+                      setCurrentStatus('[緊急停止] 同一シーンで反復ループが連続発生しました。');
+                      if (aiSettings.writerModel) {
+                        await OllamaService.stopModel(aiSettings.writerModel, aiSettings.ollamaUrl);
+                      }
+                      if (aiSettings.editorModel && aiSettings.editorModel !== aiSettings.writerModel) {
+                        await OllamaService.stopModel(aiSettings.editorModel, aiSettings.ollamaUrl);
+                      }
+                      throw new Error('同一シーンで反復ループが連続発生したため緊急停止しました。');
+                    }
+                  } else {
+                    setEditorLog((prev) => [
+                      ...prev,
+                      `[緊急停止] 文章の反復ループを検知したため執筆を停止しました。`,
+                    ]);
+                    setCurrentStatus('[緊急停止] 文章の反復ループを検知したため執筆を停止しました。');
+                    if (aiSettings.writerModel) {
+                      await OllamaService.stopModel(aiSettings.writerModel, aiSettings.ollamaUrl);
+                    }
+                    if (aiSettings.editorModel && aiSettings.editorModel !== aiSettings.writerModel) {
+                      await OllamaService.stopModel(aiSettings.editorModel, aiSettings.ollamaUrl);
+                    }
+                    throw new Error('文章の反復ループを検知したため緊急停止しました。');
+                  }
+                }
                 throw sceneErr;
               }
 
@@ -809,6 +871,8 @@ export const GeneratorView: React.FC<GeneratorViewProps> = ({
   };
 
   const handlePause = async () => {
+    isDegenerationAbortedRef.current = false;
+    sameSceneDegenCountRef.current = 0;
     if (currentSession.abortController) {
       currentSession.abortController.abort();
     }

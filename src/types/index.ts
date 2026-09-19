@@ -98,6 +98,7 @@ export interface AISettings {
   thinkCommandTargets?: ThinkCommandTargets; // 各AI呼び出し項目ごとの思考抑止(/nothink)チェックボックス設定
   systemPrompts?: SystemPrompts; // カスタムシステムプロンプト設定
   obsidianVaultPath?: string; // Obsidian Vault フォルダパス (例: C:/Users/name/Documents/Obsidian/Vault)
+  autoRetryOnDegeneration?: boolean; // 本文執筆中に繰り返し(デジェネレーション)を検知した場合にOllamaをリセットして自動再起動する設定
 }
 
 export interface ReviewComment {

@@ -166,6 +166,7 @@ export class OllamaService {
       ],
       stream: false,
       keep_alive: keepAliveParam,
+      ...(thinkMode === 'nothink' ? { think: false } : thinkMode === 'think' ? { think: true } : {}),
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
@@ -252,6 +253,7 @@ export class OllamaService {
       ],
       stream: true,
       keep_alive: keepAliveParam,
+      ...(thinkMode === 'nothink' ? { think: false } : thinkMode === 'think' ? { think: true } : {}),
       ...(formatJson ? { format: 'json' } : {}),
       options: {
         temperature,
